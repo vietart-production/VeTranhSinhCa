@@ -1,0 +1,130 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &9153264294492763217
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 6.75653
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -3.10492
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -1.909
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_ConstrainProportionsScale
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      propertyPath: m_Name
+      value: Camap
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5395899009401718543}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8402143834267381876}
+  m_SourcePrefab: {fileID: 100100000, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+--- !u!1 &8342782729876457728 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: c83a64ca913a1994bab38c61a29522eb, type: 3}
+  m_PrefabInstance: {fileID: 9153264294492763217}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &5395899009401718543
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8342782729876457728}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 15eb2d776921eed40968d2a1cdbb251b, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &8402143834267381876
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8342782729876457728}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a44c13bfdb311524ca65995e50704d3d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DOTweenFishAnim
+  swimBounds: {fileID: 0}
+  spawnDuration: 0.5
+  dropDuration: 1.2
+  swimSpeed: 1
+  waypointsPerSegment: 3
+  waveHeight: 2
+  maxTiltAngle: 20
+  spriteFacesRight: 1
+  lifetime: 180
+  fadeOutDuration: 1

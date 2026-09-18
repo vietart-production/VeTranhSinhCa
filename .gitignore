@@ -73,3 +73,10 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# QR scan pipeline working folders (runtime test data, not source; live outside Assets/)
+/Executive_folder/
+/Scanned_Folder/
+
+# Serena MCP tool local cache/state
+/.serena/
