@@ -20,10 +20,21 @@ Shader "Custom/FishBody"
         _TailSide("Tail Side (0 = UV.x 0 la duoi, 1 = UV.x 1 la duoi)", Float) = 1
         _WavePhase("Wave Phase (rieng tung ca, tranh dong bo gia tao)", Float) = 0
         _TailWaveStart("Tail Wave Start (0..1, truoc nguong nay gan nhu dung yen)", Range(0, 1)) = 0.72
+        _BodyAxis("Body Axis (0 = truc ngang UV.x mac dinh, 1 = truc doc UV.y - danh cho texture da bi xoay 90 do qua textureRotationDegrees)", Float) = 0
+
+        _DeformMode("Deform Mode (0 = song doc than tu dau den duoi, 1 = song toa tron tu tam ra bien, danh cho sao bien/cua khong co truc dau-duoi)", Float) = 0
+        _ArmCount("Arm Count (chi dung khi Deform Mode = 1, so 'canh' toa quanh tam)", Float) = 5
+
+        _FinBandCenter("Fin Band Center (0..1 doc than, vi tri vay nguc gan dau)", Range(0, 1)) = 0.18
+        _FinBandWidth("Fin Band Width (do rong vung vay rung)", Range(0.02, 0.5)) = 0.12
+        _FinWaveFrequency("Fin Wave Frequency", Float) = 6
+        _FinWaveAmplitude("Fin Wave Amplitude (0 = tat, mac dinh khong anh huong loai chua bat)", Float) = 0
 
         _TwistTriggerTime("Twist Trigger Time (_Time.y luc kich hoat, -1000 = chua kich hoat)", Float) = -1000
         _TwistTravelDuration("Twist Travel Duration (thoi gian con xoan lan tu dau den duoi)", Float) = 0.5
-        _TwistSpinDuration("Twist Spin Duration (thoi gian moi diem tu xoay du 1 vong)", Float) = 0.35
+        _TwistSpinDuration("Twist Spin Duration (thoi gian moi diem quay-quay roi tat han)", Float) = 0.35
+        _TwistFlailCycles("Twist Flail Cycles (so nhip lac qua lai truoc khi tat)", Float) = 2.5
+        _TwistMaxAngle("Twist Max Angle (goc lac toi da, do)", Range(5, 90)) = 35
     }
 
     SubShader
@@ -45,9 +56,18 @@ Shader "Custom/FishBody"
             float _TailSide;
             float _WavePhase;
             float _TailWaveStart;
+            float _BodyAxis;
+            float _DeformMode;
+            float _ArmCount;
+            float _FinBandCenter;
+            float _FinBandWidth;
+            float _FinWaveFrequency;
+            float _FinWaveAmplitude;
             float _TwistTriggerTime;
             float _TwistTravelDuration;
             float _TwistSpinDuration;
+            float _TwistFlailCycles;
+            float _TwistMaxAngle;
         CBUFFER_END
 
         TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
@@ -73,22 +93,52 @@ Shader "Custom/FishBody"
         {
             float tailWeight = smoothstep(_TailWaveStart, 1.0, bodyPos01);
             float wave = sin(_Time.y * _WaveFrequency + bodyPos01 * _WaveLength + _WavePhase) * _WaveAmplitude * tailWeight;
-            positionOS.y += wave;
+
+            // Vay nguc: 1 vung nho gan dau dao dong nhe, doc lap voi vay duoi,
+            // de phan than truoc khong con dung im hoan toan. Gaussian quanh
+            // _FinBandCenter thay vi ramp, vi day la 1 diem khu tru chu khong
+            // phai "tu day tro di". _FinWaveAmplitude mac dinh = 0 nen khong
+            // anh huong loai nao chua duoc bat rieng.
+            float finOffset = bodyPos01 - _FinBandCenter;
+            float finBand = exp(-(finOffset * finOffset) / max(_FinBandWidth * _FinBandWidth, 0.0001));
+            float finWave = sin(_Time.y * _FinWaveFrequency + _WavePhase * 1.7) * _FinWaveAmplitude * finBand;
+
+            positionOS.y += wave + finWave;
             return positionOS;
         }
 
-        // Xoay 360 do quanh truc doc than (truc X cuc bo): bat dau tu dau mui
-        // (bodyPos01 = 0), lan dan ve duoi, moi diem tu xoay du 1 vong roi dung
-        // (360 do = 0 do nen tu tro ve nguyen trang). Day la 1 su kien kich hoat
-        // rieng le (script set _TwistTriggerTime 1 lan), khong tu lap lien tuc
-        // nhu wave; truoc khi kich hoat lan dau, _TwistTriggerTime mac dinh rat
-        // am de elapsed luon am va khong xoay gi ca.
+        // Danh cho sinh vat khong co truc dau-duoi (sao bien, cua): song toa
+        // tu tam UV ra vien thay vi chay doc theo 1 truc. _ArmCount lam cac
+        // "canh" quanh tam lech pha nhau theo goc, tao cam giac tung canh
+        // rung doc lap thay vi ca khoi cung uon nhu 1 con ca.
+        float3 ApplyRadialWave(float3 positionOS, float2 uv)
+        {
+            float2 fromCenter = uv - 0.5;
+            float radius = saturate(length(fromCenter) * 1.41421356);
+            float angle = atan2(fromCenter.y, fromCenter.x);
+            float weight = smoothstep(_TailWaveStart, 1.0, radius);
+            float wave = sin(_Time.y * _WaveFrequency + angle * _ArmCount + radius * _WaveLength + _WavePhase) * _WaveAmplitude * weight;
+            float2 dir = radius > 1e-4 ? normalize(fromCenter) : float2(0.0, 0.0);
+            positionOS.xy += dir * wave;
+            return positionOS;
+        }
+
+        // Quay-quay (xoac) quanh truc doc than (truc X cuc bo): bat dau tu dau
+        // mui (bodyPos01 = 0), lan dan ve duoi, moi diem lac qua lai vai nhip
+        // (_TwistFlailCycles) voi bien do tat dan roi dung han tai nguyen trang
+        // - giong dang quay minh gion gion cua ca that hon la 1 vong lon tron
+        // trinh dien. Van la 1 su kien kich hoat rieng le (script set
+        // _TwistTriggerTime 1 lan), khong tu lap lien tuc nhu wave; truoc khi
+        // kich hoat lan dau, _TwistTriggerTime mac dinh rat am de elapsed luon
+        // am va khong xoay gi ca.
         float3 ApplyBodyTwist(float3 positionOS, float bodyPos01)
         {
             float elapsed = _Time.y - _TwistTriggerTime;
             float localStart = bodyPos01 * _TwistTravelDuration;
             float localProgress = saturate((elapsed - localStart) / max(_TwistSpinDuration, 0.0001));
-            float angle = localProgress * 6.28318530718;
+            float decay = 1.0 - localProgress;
+            float angle = sin(localProgress * _TwistFlailCycles * 6.28318530718) *
+                radians(_TwistMaxAngle) * decay;
 
             float s, c;
             sincos(angle, s, c);
@@ -102,8 +152,13 @@ Shader "Custom/FishBody"
         Varyings FishVertex(Attributes IN)
         {
             Varyings OUT;
-            float bodyPos01 = lerp(IN.uv.x, 1 - IN.uv.x, _TailSide);
-            float3 posOS = ApplyTailWave(IN.positionOS.xyz, bodyPos01);
+            // Anh xoay 90 do qua textureRotationDegrees (sua/ca_muc/ca_ngua) khien
+            // truc dau-duoi thuc te nam doc theo UV.y thay vi UV.x mac dinh.
+            float axisCoord = lerp(IN.uv.x, IN.uv.y, _BodyAxis);
+            float bodyPos01 = lerp(axisCoord, 1 - axisCoord, _TailSide);
+            float3 posOS = _DeformMode > 0.5
+                ? ApplyRadialWave(IN.positionOS.xyz, IN.uv)
+                : ApplyTailWave(IN.positionOS.xyz, bodyPos01);
             posOS = ApplyBodyTwist(posOS, bodyPos01);
             OUT.positionCS = TransformObjectToHClip(posOS);
             OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);

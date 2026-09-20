@@ -29,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -5}
-  m_LocalScale: {x: 4.197655, y: 2.2763014, z: 1.6152}
+  m_LocalScale: {x: 2.0988276, y: 1.1381507, z: 0.8076}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -52,17 +52,41 @@ MonoBehaviour:
   swimSpeed: 0.5
   waypointsPerSegment: 5
   initialDirectionOverride: 0
-  waveHeight: 2
+  waveHeight: 1
   useSwimLane: 0
   swimLaneCenter01: 0.5
   swimLaneHeight01: 0.2
-  maxTiltAngle: 20
-  tiltSmoothSpeed: 6
+  maxTiltAngle: 12
+  tiltSmoothSpeed: 9
   downwardTiltMultiplier: 1.35
   minimumDownwardTilt: 5
   spriteFacesRight: 0
+  bodyMeshSegments: 12
+  useRadialDeform: 0
+  radialArmCount: 5
+  useVerticalBodyAxis: 0
+  waveAmplitude: 0.15
+  waveFrequencyPerSpeed: 2.4
+  waveLength: 1.1
+  turnAmplitudeBoost: 0.3
+  tailWaveStart: 0.87
+  finBandCenter: 0.18
+  finBandWidth: 0.12
+  finWaveFrequency: 6
+  finWaveAmplitude: 0.042000003
+  speedVariation: 0.25
+  speedNoiseFrequency: 0.15
+  enableBodyTwist: 1
+  twistTravelDuration: 0.5
+  twistSpinDuration: 0.35
+  twistFlailCycles: 2.5
+  twistMaxAngleDegrees: 35
+  twistRestIntervalRange: {x: 2.5, y: 6}
   lifetime: 15
   fadeOutDuration: 1
+  sinkBelowBoundsMargin: 3
+  waterEntryBubbleCount: 18
+  despawnBubbleCount: 10
 --- !u!23 &36141637224119633
 MeshRenderer:
   m_ObjectHideFlags: 0

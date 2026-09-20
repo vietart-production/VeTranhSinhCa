@@ -55,9 +55,17 @@ public class QRFolderScanner : MonoBehaviour
     [Tooltip("Tự động quét/nhập ảnh mới mỗi X giây, không cần bấm phím I.")]
     [Min(0.5f)] public float autoImportIntervalSeconds = 1f;
 
+    [Header("Kích thước cá")]
+    [Tooltip("Áp dụng cho cả cá mặc định lẫn cá do scan tạo ra (không ảnh hưởng " +
+        "cá voi trang trí WhalePatrol3D - loại đó không đi qua pipeline này).")]
+    [Min(0.1f)] public float fishSizeMultiplier = 2f;
+
     [Header("Default fish")]
     public string defaultFishFolderPath = "Assets/default_fish";
     public bool spawnDefaultFishOnStart = true;
+    [Tooltip("Tỉ lệ số cá mặc định được spawn (1 = tất cả, 0.5 = giảm nửa). " +
+        "Đàn cá con (ca_con) luôn được giữ nguyên, không bị cắt giảm theo tỉ lệ này.")]
+    [Range(0.1f, 1f)] public float defaultFishSpawnRatio = 1f;
     [Tooltip("0 = tồn tại suốt scene.")]
     [Min(0f)] public float defaultFishLifetimeSeconds = 0f;
     [Tooltip("Viewport area used to distribute default fish without stacking at startup.")]
@@ -113,23 +121,16 @@ public class QRFolderScanner : MonoBehaviour
 
     [Header("Spawn")]
     public BoxCollider2D swimBounds;
-    [Tooltip("Vung tha ca nguoi choi: ca sinh o canh tren cua Box, X ngau nhien trong chieu rong Box.")]
-    public BoxCollider2D playerDropSpawnBounds;
-    [Tooltip("Khoang dem theo chieu ngang, tranh tha ca sat hai canh trai/phai cua Box.")]
-    [Range(0f, 0.4f)] public float playerDropBoundsPadding = 0.08f;
     public Transform spawnParent;
     [Min(1f)] public float lifetimeSeconds = 300f;
     [Min(0.2f)] public float dropDurationSeconds = 1.5f;
     [Min(0f)] public float dropHeight = 2f;
 
     [Header("Water drop effect")]
-    public Material dropBubbleMaterial;
     [Range(0.1f, 0.55f)] public float dropAirPhaseRatio = 0.28f;
     [Range(0.1f, 0.4f)] public float dropSettlePhaseRatio = 0.2f;
     [Range(0f, 0.8f)] public float dropSinkOvershoot = 0.22f;
     [Range(0f, 25f)] public float dropImpactTilt = 9f;
-    [Range(0, 40)] public int dropBubbleCount = 18;
-    public Vector2 dropBubbleSizeRange = new Vector2(0.08f, 0.2f);
 
     private readonly Queue<GameObject> pendingFish = new Queue<GameObject>();
     private readonly HashSet<string> failedExecutionFiles =
@@ -358,9 +359,19 @@ public class QRFolderScanner : MonoBehaviour
         string[] files = Array.FindAll(Directory.GetFiles(resolvedFolder), IsSupportedImage);
         Array.Sort(files, StringComparer.OrdinalIgnoreCase);
 
+        // Giu nguyen bo dau moi X file de giam so luong deu, tru "dan ca con"
+        // (ca_con) luon duoc spawn du - dan cai chi co 1 anh, khong phai loai
+        // dang lam ho qua tai can cat bot.
+        int keepEveryNth = Mathf.Max(1, Mathf.RoundToInt(1f / Mathf.Max(0.01f, defaultFishSpawnRatio)));
+
         int spawnedCount = 0;
         for (int index = 0; index < files.Length; index++)
         {
+            bool isSmallFishFile = Path.GetFileNameWithoutExtension(files[index])
+                .ToLowerInvariant().StartsWith("ca_con");
+            if (!isSmallFishFile && index % keepEveryNth != 0)
+                continue;
+
             Vector2 viewportPosition = GetDefaultFishViewportPosition(index, files.Length);
             // Golden-ratio distribution keeps neighbouring files/species out of the same depth layer.
             float depth01 = Mathf.Repeat(index * 0.61803398875f, 1f);
@@ -1054,9 +1065,15 @@ public class QRFolderScanner : MonoBehaviour
         {
             float spawnZ = fixedDepth ?? -2.5f;
             float distanceFromCamera = spawnZ - mainCamera.transform.position.z;
+            // Cua bo o day: dat mieng dat theo % chieu cao camera (luon nam
+            // trong khung hinh o bat ky do sau nao), thay vi tinh theo the
+            // gioi tu 1 collider vung boi rong hon man hinh thuc te.
+            bool landsLow = template.qrId == "cua";
             Vector2 viewportXY = fixedViewportPosition ?? new Vector2(
                 UnityEngine.Random.Range(0.2f, 0.8f),
-                UnityEngine.Random.Range(0.25f, 0.75f));
+                landsLow
+                    ? UnityEngine.Random.Range(0.06f, 0.22f)
+                    : UnityEngine.Random.Range(0.25f, 0.75f));
             Vector3 viewportPosition = new Vector3(viewportXY.x, viewportXY.y, distanceFromCamera);
             landingPosition = mainCamera.ViewportToWorldPoint(viewportPosition);
             landingPosition.z = spawnZ;
@@ -1076,25 +1093,6 @@ public class QRFolderScanner : MonoBehaviour
                 landingPosition.x, bounds.max.y + dropHeight, landingPosition.z);
         }
 
-        if (prepareDrop && playerDropSpawnBounds != null)
-        {
-            Bounds dropBounds = playerDropSpawnBounds.bounds;
-            float padding = Mathf.Clamp(playerDropBoundsPadding, 0f, 0.4f);
-            float dropX = Mathf.Lerp(
-                dropBounds.min.x,
-                dropBounds.max.x,
-                UnityEngine.Random.Range(padding, 1f - padding));
-            queuedPosition = new Vector3(
-                dropX,
-                dropBounds.max.y,
-                landingPosition.z);
-
-            // Keep the whole drop inside the selected left-side region. Previously the
-            // spawn point used the Box but the landing point kept its random screen X,
-            // making the fish immediately drift back toward the centre.
-            landingPosition.x = dropX;
-        }
-
         Vector3 spawnPosition = prepareDrop ? queuedPosition : landingPosition;
         GameObject fish = Instantiate(template.prefab, spawnPosition, Quaternion.identity, spawnParent);
         fish.SetActive(false);
@@ -1111,6 +1109,7 @@ public class QRFolderScanner : MonoBehaviour
                 depthScale *= defaultStarfishScaleMultiplier;
             fish.transform.localScale *= depthScale;
         }
+        fish.transform.localScale *= fishSizeMultiplier;
 
         float emissionIntensity = isDefaultFish
             ? defaultFishEmissionIntensity
@@ -1189,16 +1188,80 @@ public class QRFolderScanner : MonoBehaviour
                 dropAirPhaseRatio,
                 dropSettlePhaseRatio,
                 dropSinkOvershoot,
-                dropImpactTilt,
-                dropBubbleMaterial,
-                dropBubbleCount,
-                dropBubbleSizeRange);
+                dropImpactTilt);
         }
 
         BackgroundFishSpawner interactionSettings =
             UnityEngine.Object.FindFirstObjectByType<BackgroundFishSpawner>();
         if (interactionSettings != null)
             interactionSettings.ConfigureClickInteraction(fish);
+
+        // Cua/tom/ca_ngua/sua: cung duong roi nuoc nhu moi loai (dep, giu
+        // nguyen), nhung sau khi "cham day" thi doi han sang script chuyen
+        // dong rieng thay vi tiep tuc boi ngang nhu ca thuong - truoc day
+        // nhanh nay bi thieu hoan toan nen vd ca ngua van tu lat trai/phai
+        // nhu ca binh thuong. Ca_muc KHONG nam trong danh sach nay - no boi
+        // binh thuong (huong ve phia dang boi), chi can khong gian rong.
+        bool usesBespokeMotionAfterLanding =
+            template.qrId == "cua" || template.qrId == "tom" ||
+            template.qrId == "ca_ngua" || template.qrId == "sua";
+        if (usesBespokeMotionAfterLanding)
+        {
+            string bespokeId = template.qrId;
+            GameObject fishRef = fish;
+            DOTweenFishAnim animationRef = animation;
+            BoxCollider2D bespokeBounds = swimBounds;
+            Vector2 crabBottomRange = interactionSettings != null
+                ? interactionSettings.crabBottomHeightRange
+                : new Vector2(0.02f, 0.16f);
+            float crabHalfWidth = interactionSettings != null
+                ? interactionSettings.crabPatrolHalfWidth
+                : 1.8f;
+            float seahorseRadius = interactionSettings != null
+                ? interactionSettings.seahorsePatrolRadius
+                : 1f;
+            float switchDelay = prepareDrop ? dropDurationSeconds + 0.1f : 0.05f;
+
+            DOVirtual.DelayedCall(Mathf.Max(0.05f, switchDelay), () =>
+            {
+                if (fishRef == null)
+                    return;
+                // enabled = false khong huy tween DOPath dang chay do; tween cu
+                // van tiep tuc keo transform di theo doan duong con lai, danh
+                // nhau voi script rieng moi gan vao -> giat cuc/tele. Phai
+                // dung StopSwimmingImmediately() de huy han tween truoc.
+                if (animationRef != null)
+                    animationRef.StopSwimmingImmediately();
+
+                switch (bespokeId)
+                {
+                    case "cua":
+                        CrabScuttleAnim scuttle = fishRef.GetComponent<CrabScuttleAnim>();
+                        if (scuttle == null)
+                            scuttle = fishRef.AddComponent<CrabScuttleAnim>();
+                        scuttle.Configure(bespokeBounds, crabBottomRange, crabHalfWidth);
+                        break;
+                    case "tom":
+                        ShrimpFlickAnim flick = fishRef.GetComponent<ShrimpFlickAnim>();
+                        if (flick == null)
+                            flick = fishRef.AddComponent<ShrimpFlickAnim>();
+                        flick.Configure(bespokeBounds);
+                        break;
+                    case "ca_ngua":
+                        SeahorseHoverAnim hover = fishRef.GetComponent<SeahorseHoverAnim>();
+                        if (hover == null)
+                            hover = fishRef.AddComponent<SeahorseHoverAnim>();
+                        hover.Configure(bespokeBounds, seahorseRadius);
+                        break;
+                    case "sua":
+                        JellyfishDriftAnim drift = fishRef.GetComponent<JellyfishDriftAnim>();
+                        if (drift == null)
+                            drift = fishRef.AddComponent<JellyfishDriftAnim>();
+                        drift.Configure(bespokeBounds);
+                        break;
+                }
+            });
+        }
 
         Debug.Log($"[QR] Spawn: {spawnPosition}, landing: {landingPosition}, " +
                   $"texture: {texture.width}x{texture.height}");

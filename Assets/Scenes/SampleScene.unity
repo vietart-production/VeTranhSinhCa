@@ -267,8 +267,10 @@ MonoBehaviour:
   autoReleaseFish: 1
   scannedFolderPath: Scanned_Folder
   autoImportIntervalSeconds: 1
+  fishSizeMultiplier: 2
   defaultFishFolderPath: Assets/default_fish
-  spawnDefaultFishOnStart: 0
+  spawnDefaultFishOnStart: 1
+  defaultFishSpawnRatio: 0.5
   defaultFishLifetimeSeconds: 0
   defaultFishViewportArea:
     serializedVersion: 2
@@ -277,7 +279,7 @@ MonoBehaviour:
     width: 0.76
     height: 0.62
   defaultFishDepthRange: {x: -7.2, y: -2.3}
-  defaultFishDepthScaleRange: {x: 0.82, y: 0.48}
+  defaultFishDepthScaleRange: {x: 1, y: 1}
   defaultFishDepthSpeedRange: {x: 1, y: 0.72}
   defaultFishLaneHeight: 0.12
   defaultFishEmissionIntensity: 0.3
@@ -370,7 +372,7 @@ MonoBehaviour:
   - qrId: ca_ngua
     prefab: {fileID: 6381292499886451189, guid: fa3d917483fa1d14f813b9729e2f0558, type: 3}
     alphaTemplate: {fileID: 2800000, guid: 3e1c08302d16fb74ba68589ffa0e3dd5, type: 3}
-    spriteFacesRight: 1
+    spriteFacesRight: 0
     scanCrop:
       serializedVersion: 2
       x: 0.114999995
@@ -425,7 +427,7 @@ MonoBehaviour:
   - qrId: tom
     prefab: {fileID: 6381292499886451189, guid: b6986c47ebdfe9747b5e2f5257e11550, type: 3}
     alphaTemplate: {fileID: 2800000, guid: 968e584544f86fe428bb3f428cfbc994, type: 3}
-    spriteFacesRight: 1
+    spriteFacesRight: 0
     scanCrop:
       serializedVersion: 2
       x: 0.22999999
@@ -465,7 +467,7 @@ MonoBehaviour:
       y: 0.095
       width: 0.98
       height: 0.8
-    textureRotationDegrees: 90
+    textureRotationDegrees: 0
   outputWidth: 1024
   autoAlignScannedArtwork: 1
   artworkDarkPixelThreshold: 105
@@ -473,19 +475,14 @@ MonoBehaviour:
   autoAlignSearchPadding: 0.35
   processingFrameBudgetMs: 8
   swimBounds: {fileID: 7179163718562800936}
-  playerDropSpawnBounds: {fileID: 333155806}
-  playerDropBoundsPadding: 0.08
   spawnParent: {fileID: 0}
   lifetimeSeconds: 300
   dropDurationSeconds: 1.5
   dropHeight: 2
-  dropBubbleMaterial: {fileID: 2100000, guid: 1c8af11af671abb4eb6cf9edc631111e, type: 2}
   dropAirPhaseRatio: 0.28
   dropSettlePhaseRatio: 0.2
   dropSinkOvershoot: 0.22
   dropImpactTilt: 9
-  dropBubbleCount: 18
-  dropBubbleSizeRange: {x: 0.08, y: 0.2}
 --- !u!4 &58059878
 Transform:
   m_ObjectHideFlags: 0
@@ -720,6 +717,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Bubbles (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 4024541923486603597, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -766,26 +767,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BackgroundFishSpawner
   spawnBounds: {fileID: 7179163718562800936}
   fishPrefabs:
-  - {fileID: 4443255289610399057, guid: c52900869d8960c46895768cf969a2a0, type: 3}
-  - {fileID: 7568141414060309780, guid: 0d125f02590d85348a7aea87685af81a, type: 3}
-  - {fileID: 1523147706377577130, guid: 06466cdda590a3640af3746f687a6da6, type: 3}
-  - {fileID: 6381292499886451189, guid: 0c845acee4fa92e48a23b09e8d339e00, type: 3}
-  - {fileID: 2478481499918475808, guid: 54f6f24280008e649b44a30dc10a0b13, type: 3}
-  - {fileID: 7372339113146619420, guid: 5c4c7d3be8f38eb4e864b4f7c9afbf33, type: 3}
-  - {fileID: 7568141414060309780, guid: ef584f806ab6dee4b85ee33a48c4c806, type: 3}
-  - {fileID: 956098325761843486, guid: 7c3dd423c9ba10747b52d11865494cdd, type: 3}
-  - {fileID: 2903808280549007875, guid: 9d32338d98cd2dc43b2e54db6805e6fe, type: 3}
-  numberOfFishToSpawn: 0
-  fishSizeMultiplier: 1.3
+  - {fileID: 6381292499886451189, guid: b6986c47ebdfe9747b5e2f5257e11550, type: 3}
+  - {fileID: 6381292499886451189, guid: fa3d917483fa1d14f813b9729e2f0558, type: 3}
+  numberOfFishToSpawn: 6
+  fishSizeMultiplier: 0.65
   defaultTextureFolderPath: Assets/default_fish
   requireDefaultTexture: 1
   fishEmissionIntensity: 0.3
   fishEmissionTint: {r: 1, g: 1, b: 1, a: 1}
-  clownfishDefaultTint: {r: 1, g: 0.42, b: 0.08, a: 1}
+  caConLineArtTint: {r: 0.78, g: 0.86, b: 0.95, a: 1}
   whaleTextureWrapMode: 2
   whaleUvInset: 0.004
-  smallFishUvScale: {x: 1.267, y: 1.08}
-  smallFishUvOffset: {x: -0.085, y: -0.059}
   schoolingFishRatio: 0.3
   schoolMinSize: 4
   schoolMaxSize: 6
@@ -801,11 +793,10 @@ MonoBehaviour:
   starfishBottomHeightRange: {x: 0.06, y: 0.28}
   starfishSpeedMultiplier: 0.4
   starfishWaveHeight: 0.14
-  octopusBottomHeightRange: {x: 0.03, y: 0.12}
-  octopusRiseSpeedRange: {x: 0.85, y: 1.35}
-  octopusBurstDuration: 0.55
-  octopusGlideDuration: 0.8
-  octopusHorizontalDrift: 0.45
+  fullRangeRoamWaveHeight: 5
+  crabBottomHeightRange: {x: 0.14, y: 0.38}
+  crabPatrolHalfWidth: 12
+  seahorsePatrolRadius: 5
   sponsorFlagEnabled: 1
   sponsorFlagSprite: {fileID: 21300000, guid: f42244b98c491f94b8f594d19ff90060, type: 3}
   sponsorFlagInitialDelay: 6
@@ -816,10 +807,9 @@ MonoBehaviour:
   sponsorFlagBackInset: 0.22
   sponsorFlagRaiseDuration: 0.7
   clickBubbleMaterial: {fileID: 2100000, guid: 1c8af11af671abb4eb6cf9edc631111e, type: 2}
-  clickEscapeSpeed: 2.6
-  clickEscapeDuration: 1.4
-  clickEscapeAcceleration: 0.2
-  clickEscapeAnimationSpeed: 1.35
+  clickStartleSpeedMultiplier: 3
+  clickBubbleTrailDuration: 1.2
+  clickStartleAnimationSpeed: 2.2
   clickBubbleBurstCount: 16
   clickEscapeBubbleTrailEnabled: 1
   clickBubbleTrailRate: 20
@@ -1128,18 +1118,31 @@ MonoBehaviour:
   minimumDownwardTilt: 5
   spriteFacesRight: 0
   bodyMeshSegments: 12
+  useRadialDeform: 0
+  radialArmCount: 5
+  useVerticalBodyAxis: 0
   waveAmplitude: 0.12
   waveFrequencyPerSpeed: 1.4
   waveLength: 2.5
   turnAmplitudeBoost: 0.6
   tailWaveStart: 0.72
+  finBandCenter: 0.18
+  finBandWidth: 0.12
+  finWaveFrequency: 6
+  finWaveAmplitude: 0
   speedVariation: 0.25
   speedNoiseFrequency: 0.15
+  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
+  twistFlailCycles: 2.5
+  twistMaxAngleDegrees: 35
   twistRestIntervalRange: {x: 2.5, y: 6}
   lifetime: 60
   fadeOutDuration: 1
+  sinkBelowBoundsMargin: 3
+  waterEntryBubbleCount: 18
+  despawnBubbleCount: 10
 --- !u!50 &220713828
 Rigidbody2D:
   serializedVersion: 5
@@ -1735,11 +1738,81 @@ PrefabInstance:
       propertyPath: m_Name
       value: Bubbles (7)
       objectReference: {fileID: 0}
+    - target: {fileID: 4024541923486603597, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
+--- !u!1001 &761122039
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1782692606}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 11.060041
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 4.090003
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_Name
+      value: cavoi
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+--- !u!4 &761122040 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: a6037fdf6d00c66478bca01a38970d98, type: 3}
+  m_PrefabInstance: {fileID: 761122039}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &772044080
 GameObject:
   m_ObjectHideFlags: 0
@@ -1775,6 +1848,33 @@ Transform:
   - {fileID: 1405549722}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &802145747 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6450418766549513040, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
+  m_PrefabInstance: {fileID: 1433626705}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &802145749
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 802145747}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 45dff1487e3dcda4eb6884895b2eadac, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -1838,6 +1938,126 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1782692606}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &870373031
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 870373034}
+  - component: {fileID: 870373033}
+  - component: {fileID: 870373032}
+  m_Layer: 0
+  m_Name: OceanBubbleSystem
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &870373032
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 870373031}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 90cc8d726c4702146a5f493660ac5c80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  bubbleSystem: {fileID: 870373033}
+  targetCamera: {fileID: 330585545}
+  interactionDepth: -5
+--- !u!114 &870373033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 870373031}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1df28f456e0a4d648a51544948231a28, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  bubblePrefab: {fileID: 7550981018392441995, guid: 65dfc6f01b6170f41bec28f3e96b97e4, type: 3}
+  prewarmCount: 160
+  maxAlive: 500
+  billboard: 1
+  billboardCamera: {fileID: 330585545}
+  sortingOrderJitter: 3
+  clusterRadius: 0.75
+  coreDensityBias: 1.4
+  depthSpread: 0.15
+  spawnHeightJitter: 0.12
+  outwardBurstSpeed: 1
+  outwardDamping: 3.2
+  diveSpeed: 1.2
+  idleRate: 45
+  dragRate: 140
+  dragSpeedForMaxRate: 5
+  pressBurst: 55
+  releaseBurst: 22
+  autoBurstOnStartStop: 1
+  spawnDiveFizzOnPress: 1
+  diveFizzCount: 60
+  diveFizzContinuous: 1
+  diveFizzRatePerSecond: 35
+  diveFizzSizeRange: {x: 0.06, y: 0.22}
+  diveFizzSpeed: 1.6
+  diveFizzDampingMul: 2.5
+  diveFizzRiseSpeedMul: 1
+  diveFizzRadius: 1.6
+  diveFizzLifeMul: 0.6
+  sizeMultiplierRange: {x: 0.5, y: 1}
+  bigSizeMultiplierRange: {x: 1.5, y: 1.68}
+  bigBubbleChance: 0.1
+  referenceMultiplier: 1
+  riseSpeed: 1
+  riseSizeExponent: 0.6
+  riseAccelTime: 0.55
+  lifetime: {x: 2.5, y: 6}
+  growthOverLife: 1.3
+  cullWhenOffscreen: 1
+  offscreenMargin: 0.2
+  wobbleFrequency: 4.5
+  wobbleAmplitudePerSize: 1.8
+  spiralRadiusPerSize: 1
+  spiralSpeed: {x: 1.2, y: 3.5}
+  deform: 0.13
+  axisConvergeRate: 0.5
+  current: {x: 0.05, y: 0, z: 0}
+  turbulenceStrength: 0.3
+  turbulenceSpeed: 0.35
+  tintSmall: {r: 0.8, g: 0.93, b: 1, a: 1}
+  tintBig: {r: 0.95, g: 0.99, b: 1, a: 1}
+  alphaRange: {x: 0.35, y: 0.85}
+  smoothnessRange: {x: 0.88, y: 1}
+  fadeInTime: 0.18
+  popInTime: 0.28
+  popInOvershoot: 1.6
+  spawnPopShards: 1
+  shardMinParentMultiplier: 1.2
+  shardCount: {x: 2, y: 5}
+  autoSetTweenCapacity: 1
+--- !u!4 &870373034
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 870373031}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &912207314
 PrefabInstance:
@@ -2157,18 +2377,31 @@ MonoBehaviour:
   minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
+  useRadialDeform: 0
+  radialArmCount: 5
+  useVerticalBodyAxis: 0
   waveAmplitude: 0.3
   waveFrequencyPerSpeed: 1.4
   waveLength: 2.5
   turnAmplitudeBoost: 0.6
   tailWaveStart: 0.72
+  finBandCenter: 0.18
+  finBandWidth: 0.12
+  finWaveFrequency: 6
+  finWaveAmplitude: 0
   speedVariation: 0.25
   speedNoiseFrequency: 0.15
+  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
+  twistFlailCycles: 2.5
+  twistMaxAngleDegrees: 35
   twistRestIntervalRange: {x: 2.5, y: 6}
   lifetime: 15
   fadeOutDuration: 1
+  sinkBelowBoundsMargin: 3
+  waterEntryBubbleCount: 18
+  despawnBubbleCount: 10
 --- !u!33 &1034315462
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -2372,6 +2605,52 @@ Transform:
   - {fileID: 379078050}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1262700083 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
+  m_PrefabInstance: {fileID: 1433626705}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &1262700084
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1262700083}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 45dff1487e3dcda4eb6884895b2eadac, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &1262700085
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1262700083}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 79f47caca3d54e23bbce50d1ef2fde36, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WhalePatrol3D
+  whaleScale: 1
+  patrolHalfWidth: 12
+  swimSpeed: 1.15
+  verticalBob: 0.3
+  bobSpeed: 0.65
+  turnSpeed: 0.2
+  invertFacing: 0
 --- !u!1001 &1263605829
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2536,24 +2815,36 @@ PrefabInstance:
     m_TransformParent: {fileID: 1782692606}
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.56867
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.56867
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.56867
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.24785995
+      value: 6.59723
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -0.57287
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.00999999
+      value: 0.010150015
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.7071068
+      value: 0.6378271
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.7071068
+      value: -0.7701796
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
       propertyPath: m_LocalRotation.y
@@ -2565,7 +2856,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
+      value: -100.74
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
@@ -2586,7 +2877,16 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1262700085}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1262700084}
+    - targetCorrespondingSourceObject: {fileID: 6450418766549513040, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 802145749}
   m_SourcePrefab: {fileID: 100100000, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
 --- !u!1001 &1471149525
 PrefabInstance:
@@ -2735,9 +3035,8 @@ Transform:
   m_Children:
   - {fileID: 113541845}
   - {fileID: 379518323}
-  - {fileID: 136258199}
-  - {fileID: 2274883225159862398}
   - {fileID: 20775545}
+  - {fileID: 136258199}
   - {fileID: 220713825}
   - {fileID: 1541188743}
   - {fileID: 222753009}
@@ -2748,6 +3047,7 @@ Transform:
   - {fileID: 1335400961}
   - {fileID: 1270462422}
   - {fileID: 841730967}
+  - {fileID: 761122040}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &1851506690 stripped
@@ -2876,18 +3176,31 @@ MonoBehaviour:
   minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
+  useRadialDeform: 0
+  radialArmCount: 5
+  useVerticalBodyAxis: 0
   waveAmplitude: 0.3
   waveFrequencyPerSpeed: 1.4
   waveLength: 2.5
   turnAmplitudeBoost: 0.6
   tailWaveStart: 0.72
+  finBandCenter: 0.18
+  finBandWidth: 0.12
+  finWaveFrequency: 6
+  finWaveAmplitude: 0
   speedVariation: 0.25
   speedNoiseFrequency: 0.15
+  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
+  twistFlailCycles: 2.5
+  twistMaxAngleDegrees: 35
   twistRestIntervalRange: {x: 2.5, y: 6}
   lifetime: 15
   fadeOutDuration: 1
+  sinkBelowBoundsMargin: 3
+  waterEntryBubbleCount: 18
+  despawnBubbleCount: 10
 --- !u!33 &1916961572
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -2998,18 +3311,31 @@ MonoBehaviour:
   minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
+  useRadialDeform: 0
+  radialArmCount: 5
+  useVerticalBodyAxis: 0
   waveAmplitude: 0.3
   waveFrequencyPerSpeed: 1.4
   waveLength: 2.5
   turnAmplitudeBoost: 0.6
   tailWaveStart: 0.72
+  finBandCenter: 0.18
+  finBandWidth: 0.12
+  finWaveFrequency: 6
+  finWaveAmplitude: 0
   speedVariation: 0.25
   speedNoiseFrequency: 0.15
+  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
+  twistFlailCycles: 2.5
+  twistMaxAngleDegrees: 35
   twistRestIntervalRange: {x: 2.5, y: 6}
   lifetime: 15
   fadeOutDuration: 1
+  sinkBelowBoundsMargin: 3
+  waterEntryBubbleCount: 18
+  despawnBubbleCount: 10
 --- !u!33 &1951417512
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -3127,6 +3453,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Bubbles (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 4024541923486603597, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3162,7 +3492,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1993158135}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: 4c4d1fa7ef422a643a1cd599e679041c, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: 2739acd97dc9d7c49a9b92cf94148bf7, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 0}
@@ -3330,6 +3660,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Bubbles (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 4024541923486603597, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3448,18 +3782,31 @@ MonoBehaviour:
   minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
+  useRadialDeform: 0
+  radialArmCount: 5
+  useVerticalBodyAxis: 0
   waveAmplitude: 0.3
   waveFrequencyPerSpeed: 1.4
   waveLength: 2.5
   turnAmplitudeBoost: 0.6
   tailWaveStart: 0.72
+  finBandCenter: 0.18
+  finBandWidth: 0.12
+  finWaveFrequency: 6
+  finWaveAmplitude: 0
   speedVariation: 0.25
   speedNoiseFrequency: 0.15
+  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
+  twistFlailCycles: 2.5
+  twistMaxAngleDegrees: 35
   twistRestIntervalRange: {x: 2.5, y: 6}
   lifetime: 15
   fadeOutDuration: 1
+  sinkBelowBoundsMargin: 3
+  waterEntryBubbleCount: 18
+  despawnBubbleCount: 10
 --- !u!33 &2094816234
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -3535,11 +3882,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6688794979668812499, guid: 2692fc68082355d489ff239e9cfc4e03, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1.5000001
+      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: 6688794979668812499, guid: 2692fc68082355d489ff239e9cfc4e03, type: 3}
       propertyPath: m_LocalScale.z
-      value: 1.5000001
+      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: 6688794979668812499, guid: 2692fc68082355d489ff239e9cfc4e03, type: 3}
       propertyPath: m_LocalPosition.x
@@ -3638,6 +3985,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Bubbles (6)
       objectReference: {fileID: 0}
+    - target: {fileID: 4024541923486603597, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3706,6 +4057,10 @@ PrefabInstance:
     - target: {fileID: 4024541923486603597, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
       propertyPath: m_Name
       value: Bubbles (8)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4024541923486603597, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3912,12 +4267,12 @@ GameObject:
   - component: {fileID: 2274883225159862400}
   - component: {fileID: 2274883225159862399}
   m_Layer: 0
-  m_Name: cavoi2
+  m_Name: Ca_Voi
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1544350331862541564
 Transform:
   m_ObjectHideFlags: 0
@@ -3927,7 +4282,7 @@ Transform:
   m_GameObject: {fileID: 825389300561812333}
   serializedVersion: 2
   m_LocalRotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071067}
-  m_LocalPosition: {x: -0, y: 0, z: 0}
+  m_LocalPosition: {x: -4.43, y: 0, z: -0}
   m_LocalScale: {x: 100, y: 100, z: 100}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4118,14 +4473,14 @@ Transform:
   m_GameObject: {fileID: 1502463471312589508}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: -2, y: 0.17372, z: 11.92}
+  m_LocalScale: {x: 0.7, y: 0.7, z: 0.7}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7143508832777263328}
   - {fileID: 1544350331862541564}
   - {fileID: 203932016750048323}
-  m_Father: {fileID: 1782692606}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!114 &2274883225159862399
 MonoBehaviour:
@@ -4139,7 +4494,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 79f47caca3d54e23bbce50d1ef2fde36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WhalePatrol3D
-  whaleScale: 1
+  whaleScale: 0.7
   patrolHalfWidth: 12
   swimSpeed: 1.15
   verticalBob: 0.3
@@ -5452,6 +5807,8 @@ SceneRoots:
   - {fileID: 1060554952}
   - {fileID: 772044081}
   - {fileID: 1199067315}
+  - {fileID: 2274883225159862398}
   - {fileID: 1782692606}
   - {fileID: 1419954476}
   - {fileID: 1993158137}
+  - {fileID: 870373034}

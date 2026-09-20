@@ -28,6 +28,7 @@ Material:
   m_InvalidKeywords:
   - _ALPHAPREMULTIPLY_ON
   - _ALPHATEST_ON
+  - _EMISSION
   - _SURFACE_TYPE_TRANSPARENT
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -104,19 +105,26 @@ Material:
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 1
     - _AlphaToMask: 0
+    - _ArmCount: 5
     - _BendAmount: 0
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
+    - _BodyAxis: 0
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
     - _Cull: 0
     - _Cutoff: 0.583
+    - _DeformMode: 0
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
     - _DstBlend: 10
     - _DstBlendAlpha: 10
     - _EnvironmentReflections: 1
+    - _FinBandCenter: 0.18
+    - _FinBandWidth: 0.12
+    - _FinWaveAmplitude: 0.0168
+    - _FinWaveFrequency: 6
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
@@ -133,22 +141,24 @@ Material:
     - _SrcBlendAlpha: 1
     - _Surface: 1
     - _TailSide: 1
-    - _TailWaveStart: 0.72
+    - _TailWaveStart: 0.82
+    - _TwistFlailCycles: 2.5
+    - _TwistMaxAngle: 35
     - _TwistSpinDuration: 0.35
     - _TwistTravelDuration: 0.5
-    - _TwistTriggerTime: 114.60236
+    - _TwistTriggerTime: 128.0977
     - _UVSec: 0
-    - _WaveAmplitude: 0.35471833
-    - _WaveFrequency: 0.6695433
+    - _WaveAmplitude: 0.096
+    - _WaveFrequency: 0.07674507
     - _WaveLength: 2.5
-    - _WavePhase: 131.8289
+    - _WavePhase: 196.3774
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 0
     m_Colors:
     - _BaseColor: {r: 0.9063317, g: 0.9063317, b: 0.9063317, a: 0}
     - _Color: {r: 0.9063317, g: 0.9063317, b: 0.9063317, a: 1}
-    - _EmissionColor: {r: 0, g: 0, b: 0, a: 0}
+    - _EmissionColor: {r: 0.24695443, g: 1.5805085, b: 1.1359905, a: 0.49390885}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

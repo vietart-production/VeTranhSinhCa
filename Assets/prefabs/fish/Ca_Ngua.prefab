@@ -29,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 6.75653, y: -3.10492, z: -1.909}
-  m_LocalScale: {x: 2.702481, y: 3.376897, z: 2.4013114}
+  m_LocalScale: {x: 1.3512405, y: 1.6884485, z: 1.2006557}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -113,17 +113,30 @@ MonoBehaviour:
   tiltSmoothSpeed: 6
   downwardTiltMultiplier: 1.35
   minimumDownwardTilt: 5
-  spriteFacesRight: 0
+  spriteFacesRight: 1
   bodyMeshSegments: 12
-  waveAmplitude: 0.3
-  waveFrequencyPerSpeed: 1.4
-  waveLength: 2.5
+  useRadialDeform: 0
+  radialArmCount: 5
+  useVerticalBodyAxis: 1
+  waveAmplitude: 0.05
+  waveFrequencyPerSpeed: 8
+  waveLength: 2
   turnAmplitudeBoost: 0.6
-  tailWaveStart: 0.72
+  tailWaveStart: 0.78
+  finBandCenter: 0.18
+  finBandWidth: 0.12
+  finWaveFrequency: 6
+  finWaveAmplitude: 0
   speedVariation: 0.25
   speedNoiseFrequency: 0.15
+  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
+  twistFlailCycles: 2.5
+  twistMaxAngleDegrees: 35
   twistRestIntervalRange: {x: 2.5, y: 6}
   lifetime: 15
   fadeOutDuration: 1
+  sinkBelowBoundsMargin: 3
+  waterEntryBubbleCount: 18
+  despawnBubbleCount: 10

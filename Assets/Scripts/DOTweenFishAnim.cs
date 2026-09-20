@@ -1,3 +1,4 @@
+using System.Collections;
 using DG.Tweening;
 using UnityEngine;
 
@@ -35,6 +36,12 @@ public class DOTweenFishAnim : MonoBehaviour
     [Header("Vẫy đuôi (shader FishBody)")]
     [Tooltip("Số đoạn chia dọc thân của mesh lưới dùng chung cho mọi con cá.")]
     [Min(2)] public int bodyMeshSegments = 12;
+    [Tooltip("false: song vẫy dọc theo trục đầu-đuôi (đa số cá). true: song toả tròn từ tâm ra viền, dùng cho sinh vật không có trục đầu-đuôi (sao biển, cua).")]
+    public bool useRadialDeform;
+    [Tooltip("Chỉ dùng khi Use Radial Deform bật: số 'cánh' toả quanh tâm.")]
+    [Min(1f)] public float radialArmCount = 5f;
+    [Tooltip("Bật cho loài có textureRotationDegrees=90 (sứa, cá mực, cá ngựa): trục đầu-đuôi thật nằm dọc theo UV.y sau khi ảnh bị xoay, không phải UV.x mặc định.")]
+    public bool useVerticalBodyAxis;
     [Min(0f)] public float waveAmplitude = 0.3f;
     [Tooltip("Tần số vẫy = swimSpeed * hệ số này.")]
     [Min(0f)] public float waveFrequencyPerSpeed = 1.4f;
@@ -44,22 +51,44 @@ public class DOTweenFishAnim : MonoBehaviour
     [Tooltip("0..1: trước ngưỡng này (tính từ đầu) gần như đứng yên, chỉ đoạn cuối đuôi mới vẫy.")]
     [Range(0f, 0.95f)] public float tailWaveStart = 0.72f;
 
+    [Header("Vẫy vây ngực (gần đầu, độc lập với đuôi)")]
+    [Tooltip("Vị trí vây ngực dọc thân, 0 = đầu, 1 = đuôi.")]
+    [Range(0f, 1f)] public float finBandCenter = 0.18f;
+    [Range(0.02f, 0.5f)] public float finBandWidth = 0.12f;
+    [Min(0f)] public float finWaveFrequency = 6f;
+    [Tooltip("0 = tắt hẳn (mặc định). Đặt > 0 để phần đầu không còn đứng im hoàn toàn.")]
+    [Min(0f)] public float finWaveAmplitude;
+
     [Header("Nhịp bơi")]
     [Tooltip("Biến thiên tốc độ mỗi đoạn bơi, dùng Perlin noise chậm thay vì random đột ngột.")]
     [Range(0f, 0.6f)] public float speedVariation = 0.25f;
     [Min(0.01f)] public float speedNoiseFrequency = 0.15f;
 
-    [Header("Xoắn toàn thân (ngẫu nhiên, phong cách hoạt hình)")]
-    [Tooltip("Thời gian con xoắn lan từ đầu mũi đến đuôi.")]
+    [Header("Xoay tròn Z ngẫu nhiên (giống Cua), dùng chung cho mọi loài")]
+    [Tooltip("Tắt hẳn cú xoay tròn 360 độ cho những loài không hợp (cá mập, rùa, cua dùng script riêng...).")]
+    public bool enableBodyTwist = true;
+    [Tooltip("Không còn dùng để tạo hiệu ứng xoay (chỉ còn cộng vào khoảng nghỉ giữa 2 lần xoay). Giữ lại để không mất giá trị đã tinh chỉnh trên các prefab.")]
     [Min(0.05f)] public float twistTravelDuration = 0.5f;
-    [Tooltip("Thời gian mỗi điểm trên thân tự xoay đủ 1 vòng 360° khi con xoắn đi qua.")]
+    [Tooltip("Thời gian 1 vòng xoay tròn Z diễn ra (chỉ có tác dụng với loài đọc SpinOffsetAngle).")]
     [Min(0.05f)] public float twistSpinDuration = 0.35f;
-    [Tooltip("Khoảng thời gian ngẫu nhiên nghỉ thêm giữa 2 lần xoắn (sau khi lần trước đã lan hết tới đuôi).")]
+    [Tooltip("Không còn dùng để tạo hiệu ứng xoay. Giữ lại để không mất giá trị đã tinh chỉnh trên các prefab.")]
+    [Min(0.5f)] public float twistFlailCycles = 2.5f;
+    [Tooltip("Không còn dùng để tạo hiệu ứng xoay. Giữ lại để không mất giá trị đã tinh chỉnh trên các prefab.")]
+    [Range(5f, 90f)] public float twistMaxAngleDegrees = 35f;
+    [Tooltip("Khoảng thời gian ngẫu nhiên nghỉ thêm giữa 2 lần xoay tròn.")]
     public Vector2 twistRestIntervalRange = new Vector2(2.5f, 6f);
 
     [Header("Thời gian tồn tại")]
     public float lifetime = 15f;
     [Min(0f)] public float fadeOutDuration = 1f;
+    [Tooltip("Khi hết vòng đời, cá rơi tõm xuống dưới đáy vùng bơi thay vì mờ dần tại chỗ. Khoảng cách rơi thêm qua khỏi đáy.")]
+    [Min(0f)] public float sinkBelowBoundsMargin = 3f;
+
+    [Header("Bong bóng (dùng chung OceanBubbleSystem trong scene)")]
+    [Tooltip("Số bong bóng phun ra lúc cá vừa chạm mặt nước khi được thả xuống.")]
+    [Min(0)] public int waterEntryBubbleCount = 18;
+    [Tooltip("Số bong bóng phun ra lúc cá bắt đầu chìm/despawn.")]
+    [Min(0)] public int despawnBubbleCount = 10;
 
     private static Mesh sharedBodyMesh;
 
@@ -71,8 +100,12 @@ public class DOTweenFishAnim : MonoBehaviour
     private float motionSeed;
     private float currentSwimSpeed;
     private Tween twistScheduleTween;
+    private Tween spinTween;
+    private float currentTiltAngle;
+    private float spinOffsetAngle;
     private Tween fadeOutTween;
     private Tween currentPathTween;
+    private Coroutine dropBubbleCoroutine;
     private int currentDirection = -1;
     private int facingDirection = -1;
     private bool dropPrepared;
@@ -82,10 +115,14 @@ public class DOTweenFishAnim : MonoBehaviour
     private float dropSettlePhaseRatio = 0.2f;
     private float dropSinkOvershoot = 0.22f;
     private float dropImpactTilt = 9f;
-    private Material dropBubbleMaterial;
-    private int dropBubbleCount = 18;
-    private Vector2 dropBubbleSizeRange = new Vector2(0.08f, 0.2f);
     private bool initialized;
+    private float startledSpeedMultiplier = 1f;
+
+    // Doc boi cac script chuyen dong rieng (Seahorse/Jellyfish...) de cong them
+    // vao goc xoay Z cua chinh chung - component nay co the dang bi disable
+    // (loai dung bespoke motion) nhung PlaySpin() van chay binh thuong vi no
+    // chi la 1 DOTween.To() tren field, khong phu thuoc Update()/enabled.
+    public float SpinOffsetAngle => spinOffsetAngle;
 
     public void PrepareDrop(Vector3 landingPosition, float duration)
     {
@@ -102,10 +139,7 @@ public class DOTweenFishAnim : MonoBehaviour
         float airPhaseRatio,
         float settlePhaseRatio,
         float sinkOvershoot,
-        float impactTilt,
-        Material bubbleMaterial,
-        int bubbleCount,
-        Vector2 bubbleSizeRange)
+        float impactTilt)
     {
         dropPrepared = true;
         dropLandingPosition = landingPosition;
@@ -115,9 +149,6 @@ public class DOTweenFishAnim : MonoBehaviour
         dropSettlePhaseRatio = Mathf.Clamp(settlePhaseRatio, 0.1f, 0.4f);
         dropSinkOvershoot = Mathf.Max(0f, sinkOvershoot);
         dropImpactTilt = Mathf.Clamp(impactTilt, 0f, 25f);
-        dropBubbleMaterial = bubbleMaterial;
-        dropBubbleCount = Mathf.Max(0, bubbleCount);
-        dropBubbleSizeRange = bubbleSizeRange;
     }
 
     public void StopSwimmingImmediately()
@@ -126,11 +157,28 @@ public class DOTweenFishAnim : MonoBehaviour
             currentPathTween.Kill();
 
         currentPathTween = null;
-        // Con xoan (neu dang chay) van tu ket thuc theo _Time.y ben shader, chi
-        // can dung hen gio cho lan xoan tiep theo trong luc ca dang bo chay.
         twistScheduleTween?.Kill();
+        spinTween?.Kill();
         transform.DOKill();
         enabled = false;
+    }
+
+    // Bi cham/click: KHONG roi quy dao dang boi (tranh phai ghep lai sau, tung
+    // gay giat/lech vi tri). Chi dao nguoc huong tren chinh duong bang dang di
+    // (StartNewSwimSegment(true) tu dao currentDirection va nham ve dung mep
+    // A/B vua xuat phat) va tang toc rut lui trong dung 1 doan boi do.
+    public void StartleReverse(float speedMultiplier, float waveFrequencyMultiplier)
+    {
+        if (isDying)
+            return;
+
+        startledSpeedMultiplier = Mathf.Max(1f, speedMultiplier);
+        StartNewSwimSegment(true);
+        // Goi sau StartNewSwimSegment vi ham do tu reset _WaveFrequency ve 1x
+        // o dau; muon "vay hoang loan" nhanh hon phai ghi de sau khi no chay xong.
+        SetWaveFrequencyMultiplier(Mathf.Max(1f, waveFrequencyMultiplier));
+        if (enableBodyTwist)
+            PlaySpin();
     }
 
     public void ResumeSwimmingFromCurrentPosition(int horizontalDirection)
@@ -154,6 +202,8 @@ public class DOTweenFishAnim : MonoBehaviour
 
         currentDirection = horizontalDirection >= 0 ? 1 : -1;
         facingDirection = currentDirection;
+        currentTiltAngle = 0f;
+        spinOffsetAngle = 0f;
         transform.rotation = Quaternion.identity;
         enabled = true;
         ApplyFacingDirection();
@@ -245,14 +295,39 @@ public class DOTweenFishAnim : MonoBehaviour
             bodyMaterial.SetFloat("_WaveAmplitude", waveAmplitude);
         if (bodyMaterial.HasProperty("_WaveLength"))
             bodyMaterial.SetFloat("_WaveLength", waveLength);
+        // Gia tri "an toan" ngay tu dau, phong khi component bi vo hieu hoa vinh
+        // vien (cac loai dung script rieng nhu cua/tom/ca_muc) va khong bao gio
+        // chay toi Start()/StartNewSwimSegment() de tinh lai theo swimSpeed thuc
+        // te - neu khong _WaveFrequency se giu nguyen gia tri cu con sot lai tu
+        // lan Play trươc trong file .mat.
+        if (bodyMaterial.HasProperty("_WaveFrequency"))
+            bodyMaterial.SetFloat("_WaveFrequency", waveFrequencyPerSpeed);
+        if (bodyMaterial.HasProperty("_DeformMode"))
+            bodyMaterial.SetFloat("_DeformMode", useRadialDeform ? 1f : 0f);
+        if (bodyMaterial.HasProperty("_ArmCount"))
+            bodyMaterial.SetFloat("_ArmCount", radialArmCount);
+        if (bodyMaterial.HasProperty("_BodyAxis"))
+            bodyMaterial.SetFloat("_BodyAxis", useVerticalBodyAxis ? 1f : 0f);
         if (bodyMaterial.HasProperty("_WavePhase"))
             bodyMaterial.SetFloat("_WavePhase", motionSeed);
         if (bodyMaterial.HasProperty("_TailWaveStart"))
             bodyMaterial.SetFloat("_TailWaveStart", tailWaveStart);
+        if (bodyMaterial.HasProperty("_FinBandCenter"))
+            bodyMaterial.SetFloat("_FinBandCenter", finBandCenter);
+        if (bodyMaterial.HasProperty("_FinBandWidth"))
+            bodyMaterial.SetFloat("_FinBandWidth", finBandWidth);
+        if (bodyMaterial.HasProperty("_FinWaveFrequency"))
+            bodyMaterial.SetFloat("_FinWaveFrequency", finWaveFrequency);
+        if (bodyMaterial.HasProperty("_FinWaveAmplitude"))
+            bodyMaterial.SetFloat("_FinWaveAmplitude", finWaveAmplitude);
         if (bodyMaterial.HasProperty("_TwistTravelDuration"))
             bodyMaterial.SetFloat("_TwistTravelDuration", twistTravelDuration);
         if (bodyMaterial.HasProperty("_TwistSpinDuration"))
             bodyMaterial.SetFloat("_TwistSpinDuration", twistSpinDuration);
+        if (bodyMaterial.HasProperty("_TwistFlailCycles"))
+            bodyMaterial.SetFloat("_TwistFlailCycles", twistFlailCycles);
+        if (bodyMaterial.HasProperty("_TwistMaxAngle"))
+            bodyMaterial.SetFloat("_TwistMaxAngle", twistMaxAngleDegrees);
         if (bodyMaterial.HasProperty("_TwistTriggerTime"))
             bodyMaterial.SetFloat("_TwistTriggerTime", -1000f);
     }
@@ -319,25 +394,46 @@ public class DOTweenFishAnim : MonoBehaviour
         bodyMaterial.SetFloat("_WaveFrequency", currentSwimSpeed * waveFrequencyPerSpeed * multiplier);
     }
 
-    // Kich hoat 1 lan xoan 360 do lan tu dau den duoi (xem FishBody.shader).
-    // Chi can bao shader "moc thoi gian bat dau" 1 lan; toan bo tien trinh lan
-    // toi + tu xoay du 1 vong roi dung tai moi diem deu do chinh shader tinh
-    // theo _Time.y, khong can script cap nhat gia tri moi frame.
+    // Lich hen gio cho lan lac-minh (PlaySpin) tiep theo. Thay cho hieu ung
+    // xoan-quay-quay bang shader (_TwistTriggerTime) truoc day.
     void ScheduleNextTwist()
     {
         twistScheduleTween?.Kill();
+        if (!enableBodyTwist)
+            return;
+
         float restDelay = Random.Range(twistRestIntervalRange.x, twistRestIntervalRange.y);
         float nextDelay = twistTravelDuration + twistSpinDuration + restDelay;
-        twistScheduleTween = DOVirtual.DelayedCall(nextDelay, PlayTwist);
+        twistScheduleTween = DOVirtual.DelayedCall(nextDelay, PlaySpin);
     }
 
-    void PlayTwist()
+    // Khong dung Update()/Start() - nen loai dung script chuyen dong rieng
+    // (cua/tom/ca_ngua/sua, component nay bi disable) van goi duoc de co
+    // chung "chuc nang xoay" thay vi chi cac loai boi thuong DOTweenFishAnim.
+    public void EnsureAmbientTwistScheduled()
+    {
+        if (twistScheduleTween == null || !twistScheduleTween.IsActive())
+            ScheduleNextTwist();
+    }
+
+    // Xoay tron 1 vong quanh Z roi tu tat, kieu "pingpong" cua Cua. Dung
+    // chung cho moi loai qua SpinOffsetAngle: UpdateFishTilt (ca boi thuong)
+    // cong truc tiep, Seahorse/Jellyfish tu doc va cong vao goc cua chinh ho.
+    public void PlaySpin()
     {
         if (isDying)
             return;
 
-        if (bodyMaterial != null && bodyMaterial.HasProperty("_TwistTriggerTime"))
-            bodyMaterial.SetFloat("_TwistTriggerTime", Time.timeSinceLevelLoad);
+        spinTween?.Kill();
+        float spinDirection = Random.value < 0.5f ? 1f : -1f;
+        spinOffsetAngle = 0f;
+        spinTween = DOTween.To(
+                () => spinOffsetAngle,
+                value => spinOffsetAngle = value,
+                360f * spinDirection,
+                Mathf.Max(0.1f, twistSpinDuration))
+            .SetEase(Ease.OutBack)
+            .OnComplete(() => spinOffsetAngle = 0f);
 
         ScheduleNextTwist();
     }
@@ -378,6 +474,9 @@ public class DOTweenFishAnim : MonoBehaviour
         float entryTilt = dropImpactTilt * tiltDirection;
         transform.rotation = Quaternion.Euler(0f, 0f, entryTilt * -0.25f);
 
+        if (dropBubbleCoroutine != null)
+            StopCoroutine(dropBubbleCoroutine);
+
         Sequence dropSequence = DOTween.Sequence();
         dropSequence.Append(
             transform.DOMove(waterEntryPosition, airDuration)
@@ -385,7 +484,7 @@ public class DOTweenFishAnim : MonoBehaviour
         dropSequence.Join(
             transform.DORotate(new Vector3(0f, 0f, entryTilt), airDuration)
                 .SetEase(Ease.InSine));
-        dropSequence.AppendCallback(() => CreateWaterEntryBubbles(waterEntryPosition));
+        dropSequence.AppendCallback(() => EmitBubbleBurst(waterEntryPosition, waterEntryBubbleCount, 1f, 1.2f));
         dropSequence.Append(
             transform.DOMove(submergedPosition, underwaterDuration)
                 .SetEase(Ease.OutCubic));
@@ -400,69 +499,56 @@ public class DOTweenFishAnim : MonoBehaviour
                 .SetEase(Ease.OutSine));
         dropSequence.OnComplete(() =>
         {
+            if (dropBubbleCoroutine != null)
+            {
+                StopCoroutine(dropBubbleCoroutine);
+                dropBubbleCoroutine = null;
+            }
+
             currentPathTween = null;
+            currentTiltAngle = 0f;
             transform.rotation = Quaternion.identity;
             StartNewSwimSegment(false);
         });
 
+        dropBubbleCoroutine = StartCoroutine(EmitBubbleTrailDuringDrop(safeDuration, waterEntryPosition, dropLandingPosition));
         currentPathTween = dropSequence;
     }
 
-    void CreateWaterEntryBubbles(Vector3 position)
+    IEnumerator EmitBubbleTrailDuringDrop(float totalDuration, Vector3 startPosition, Vector3 endPosition)
     {
-        if (dropBubbleCount <= 0)
+        if (totalDuration <= 0f)
+            yield break;
+
+        float elapsed = 0f;
+        while (elapsed < totalDuration)
+        {
+            float t = Mathf.Clamp01(elapsed / totalDuration);
+            Vector3 bubblePosition = Vector3.Lerp(startPosition, endPosition, t);
+            bubblePosition.x += UnityEngine.Random.Range(-0.12f, 0.12f);
+            bubblePosition.y += UnityEngine.Random.Range(-0.08f, 0.15f);
+
+            int burstCount = Mathf.Clamp(Mathf.RoundToInt(waterEntryBubbleCount * 0.35f), 1, 5);
+            EmitBubbleBurst(bubblePosition, burstCount, 0.6f, 0.8f);
+
+            float delay = Mathf.Lerp(0.14f, 0.32f, Mathf.Clamp01(t));
+            elapsed += delay;
+            yield return new WaitForSeconds(delay);
+        }
+
+        dropBubbleCoroutine = null;
+    }
+
+    // Dung chung OceanBubbleSystem cua ca be (touch/hold bubbles) thay vi tu dung
+    // 1 ParticleSystem rieng moi lan - vua dong nhat hinh anh bong bong trong toan
+    // bo scene, vua tan dung pool san co thay vi Instantiate/Destroy GameObject.
+    void EmitBubbleBurst(Vector3 position, int count, float radiusMul, float energyMul)
+    {
+        if (count <= 0)
             return;
 
-        GameObject effectObject = new GameObject("FishWaterEntryBubbles");
-        effectObject.transform.position = position;
-        ParticleSystem particles = effectObject.AddComponent<ParticleSystem>();
-        particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-
-        ParticleSystem.MainModule main = particles.main;
-        main.playOnAwake = false;
-        main.loop = false;
-        main.duration = 0.35f;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.05f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.35f, 0.95f);
-        float minimumSize = Mathf.Min(dropBubbleSizeRange.x, dropBubbleSizeRange.y);
-        float maximumSize = Mathf.Max(dropBubbleSizeRange.x, dropBubbleSizeRange.y);
-        main.startSize = new ParticleSystem.MinMaxCurve(minimumSize, maximumSize);
-        main.startColor = new ParticleSystem.MinMaxGradient(
-            new Color(0.7f, 0.93f, 1f, 0.82f),
-            new Color(0.9f, 0.99f, 1f, 0.55f));
-        main.maxParticles = Mathf.Max(24, dropBubbleCount * 2);
-        main.stopAction = ParticleSystemStopAction.Destroy;
-
-        ParticleSystem.EmissionModule emission = particles.emission;
-        emission.rateOverTime = 0f;
-        emission.burstCount = 1;
-        emission.SetBurst(0, new ParticleSystem.Burst(0f, (short)dropBubbleCount));
-
-        ParticleSystem.ShapeModule shape = particles.shape;
-        shape.shapeType = ParticleSystemShapeType.Sphere;
-        shape.radius = 0.14f;
-
-        ParticleSystem.VelocityOverLifetimeModule velocity = particles.velocityOverLifetime;
-        velocity.enabled = true;
-        velocity.space = ParticleSystemSimulationSpace.World;
-        velocity.x = new ParticleSystem.MinMaxCurve(0f);
-        velocity.y = new ParticleSystem.MinMaxCurve(0.35f);
-        velocity.z = new ParticleSystem.MinMaxCurve(0f);
-
-        ParticleSystem.NoiseModule noise = particles.noise;
-        noise.enabled = true;
-        noise.strength = 0.12f;
-        noise.frequency = 0.6f;
-
-        ParticleSystemRenderer particleRenderer = particles.GetComponent<ParticleSystemRenderer>();
-        particleRenderer.renderMode = ParticleSystemRenderMode.Billboard;
-        particleRenderer.alignment = ParticleSystemRenderSpace.View;
-        particleRenderer.sortingOrder = 25;
-        if (dropBubbleMaterial != null)
-            particleRenderer.sharedMaterial = dropBubbleMaterial;
-
-        particles.Play();
+        OceanBubbleSystem bubbleSystem = UnityEngine.Object.FindFirstObjectByType<OceanBubbleSystem>();
+        bubbleSystem?.Burst(position, count, radiusMul, energyMul);
     }
 
     void Update()
@@ -517,7 +603,8 @@ public class DOTweenFishAnim : MonoBehaviour
         // Noise cham (co seed rieng tung con) thay vi Random.Range moi doan, de
         // toc do co "nhip" tu nhien thay vi deu tuyet doi giua cac doan boi.
         float speedNoise = Mathf.PerlinNoise(motionSeed, Time.time * speedNoiseFrequency) * 2f - 1f;
-        currentSwimSpeed = swimSpeed * (1f + speedNoise * speedVariation);
+        currentSwimSpeed = swimSpeed * (1f + speedNoise * speedVariation) * startledSpeedMultiplier;
+        startledSpeedMultiplier = 1f; // chi ap dung cho dung 1 doan vua kich hoat
         SetWaveFrequencyMultiplier(1f);
 
         Vector3[] path = GenerateSmoothPath();
@@ -638,10 +725,10 @@ public class DOTweenFishAnim : MonoBehaviour
             // Đảo dấu theo hướng bơi để mũi luôn ngẩng khi dy > 0 và chúi khi dy < 0.
             float angle = pathAngle * facingDirection;
             angle = Mathf.Clamp(angle, -maxTiltAngle, maxTiltAngle);
-            Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
             float responseSpeed = movement.y < 0f ? tiltSmoothSpeed * 1.5f : tiltSmoothSpeed;
             float smoothing = 1f - Mathf.Exp(-responseSpeed * Time.deltaTime);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, smoothing);
+            currentTiltAngle = Mathf.LerpAngle(currentTiltAngle, angle, smoothing);
+            transform.rotation = Quaternion.Euler(0f, 0f, currentTiltAngle + spinOffsetAngle);
 
             // Re gap (goc nghieng lon) thi vay duoi manh hon, giong ca that dung
             // duoi de doi huong thay vi giu bien do deu bat ke dang re hay boi thang.
@@ -664,25 +751,44 @@ public class DOTweenFishAnim : MonoBehaviour
         if (currentPathTween != null && currentPathTween.IsActive())
             currentPathTween.Kill();
         twistScheduleTween?.Kill();
+        spinTween?.Kill();
+
+        // Roi tom xuong duoi day vung boi (khuat khoi khung hinh) thay vi mo
+        // dan tai cho - giong ca that mat suc noi va chim xuong khi "bien mat".
+        float targetY = bounds.min.y - sinkBelowBoundsMargin;
+        Vector3 sinkTarget = new Vector3(transform.position.x, targetY, transform.position.z);
+        float fallDuration = Mathf.Max(0.3f, fadeOutDuration);
+        float tumbleSign = Random.value < 0.5f ? 1f : -1f;
+
+        // Vai bong bong thoat ra ngay luc bat dau chim - nhu hoi thu cuoi truoc khi
+        // "bien mat" khoi tam nhin, thay vi lang le mo dan khong dau hieu gi.
+        EmitBubbleBurst(transform.position, despawnBubbleCount, 0.8f, 0.9f);
+
+        Sequence dieSequence = DOTween.Sequence();
+        dieSequence.Append(transform.DOMove(sinkTarget, fallDuration).SetEase(Ease.InQuad));
+        dieSequence.Join(
+            transform.DORotate(new Vector3(0f, 0f, 55f * tumbleSign), fallDuration, RotateMode.LocalAxisAdd)
+                .SetEase(Ease.InSine));
 
         if (bodyMaterial != null && bodyMaterial.HasProperty("_BaseColor"))
         {
-            fadeOutTween = DOTween.To(
-                    () => bodyMaterial.GetColor("_BaseColor").a,
-                    alpha =>
-                    {
-                        Color color = bodyMaterial.GetColor("_BaseColor");
-                        color.a = alpha;
-                        bodyMaterial.SetColor("_BaseColor", color);
-                    },
-                    0f,
-                    fadeOutDuration)
-                .OnComplete(() => Destroy(gameObject));
+            Color startColor = bodyMaterial.GetColor("_BaseColor");
+            dieSequence.Join(
+                DOTween.To(
+                        () => startColor.a,
+                        alpha =>
+                        {
+                            Color color = bodyMaterial.GetColor("_BaseColor");
+                            color.a = alpha;
+                            bodyMaterial.SetColor("_BaseColor", color);
+                        },
+                        0f,
+                        fallDuration * 0.5f)
+                    .SetDelay(fallDuration * 0.5f));
         }
-        else
-        {
-            Destroy(gameObject, fadeOutDuration);
-        }
+
+        dieSequence.OnComplete(() => Destroy(gameObject));
+        fadeOutTween = dieSequence;
     }
 
     void ClampPositionToBounds()
@@ -695,9 +801,16 @@ public class DOTweenFishAnim : MonoBehaviour
 
     void OnDestroy()
     {
+        if (dropBubbleCoroutine != null)
+        {
+            StopCoroutine(dropBubbleCoroutine);
+            dropBubbleCoroutine = null;
+        }
+
         transform.DOKill();
         fadeOutTween?.Kill();
         twistScheduleTween?.Kill();
+        spinTween?.Kill();
     }
 
     void OnDrawGizmosSelected()
