@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
@@ -7,48 +6,44 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// Theo doi vi tri khach tham quan qua OSC, dung giao thuc giong TouchDesigner person-tracker:
-/// /person/count (int hoac float) roi /person/x, /person/y (float, 0..1) cho tung nguoi trong frame.
-/// Thu tu x/y co the xen ke (x0 y0 x1 y1) hoac gom (x0 x1 .. y0 y1 ..) - dung 2 con tro rieng.
+/// /person/count (int) roi lan luot /person/x, /person/y (float, 0..1) cho tung nguoi trong frame.
+/// Quy doi UV sang toa do man hinh (screen space) de dung truc tiep cho cac he thong tuong tac
+/// hien co (TouchOceanManager, FishClickInteraction) - vi cac he thong nay von da nhan
+/// Vector2 screenPosition tu chuot/cham, nen khong can quy dinh mot khong gian the gioi rieng.
 ///
-/// Moi khach duoc gan 1 ID ON DINH (khop gan nhat theo UV giua cac frame, giong TDReceiver mau),
-/// de script tieu thu giu duoc trang thai rieng tung nguoi (nguon bong bong, cooldown...) thay vi
-/// bi doi nguoi khi TD sap xep lai thu tu. ID la duy nhat tren TOAN BO cac tracker trong scene.
-///
-/// Vi tri duoc quy doi sang screen space (pixel) de dung truc tiep cho cac he thong tuong tac
-/// von nhan Vector2 screenPosition tu chuot/cham (TouchOceanManager, FishClickInteraction).
-/// Script tieu thu KHONG can gan tay tracker: de mang trong thi tu dung OscPersonTracker.All.
-///
-/// Chong nhay lidar: (1) diem moi phai ton tai du confirmTime/confirmMinHits moi thanh khach
-/// (loc diem ma), (2) khach mat dau duoi signalTimeout van giu vi tri + ID (loc rot frame),
-/// (3) vi tri duoc lam muot bang positionSmoothing (loc rung).
-/// Gop khach: diem tho / khach dang track gan nhau duoi mergeRadius duoc gop lam 1.
-/// HUD + marker debug chi hien khi bat DebugOverlay (phim L), mac dinh TAT.
+/// Moi diem phat hien duoc gop nhom thanh "track" on dinh qua cac frame (khop theo khoang cach
+/// gan nhat) thay vi dung thang thu tu tin OSC lam danh tinh - giup chong nhay khi lidar mat dau
+/// tam thoi hoac tach nham 1 nguoi thanh nhieu diem.
 /// </summary>
-[DefaultExecutionOrder(-100)]
 [RequireComponent(typeof(MiniOscReceiver))]
 public class OscPersonTracker : MonoBehaviour
 {
     public enum CornerOrigin { BottomLeft, TopLeft, TopRight, BottomRight }
 
-    /// <summary>1 khach dang duoc track.</summary>
-    public readonly struct Person
+    class Track
     {
-        public readonly int Id;
-        public readonly Vector2 Uv;
-        public readonly Vector2 ScreenPosition;
-        public readonly float FirstSeenTime;
-
-        public Person(int id, Vector2 uv, Vector2 screenPosition, float firstSeenTime)
-        {
-            Id = id; Uv = uv; ScreenPosition = screenPosition; FirstSeenTime = firstSeenTime;
-        }
+        public int id;
+        public Vector2 screenPos;
+        public float lastSeen;
+        public bool claimedThisBatch;
     }
 
-    [Tooltip("⭐ CHONG NHAY (mat dau): khach bi lidar mat dau bao lau van duoc GIU O VI TRI CU " +
-             "truoc khi bi coi la da roi vung. Lidar hay rot diem 1-5 frame khi nguoi quay nguoi / " +
-             "bi che - qua ngan thi hieu ung tat-bat lien tuc. Goi y: 0.3-0.6s.")]
-    public float signalTimeout = 0.4f;
+    [Header("Chong nhay / gop nguoi")]
+    [Tooltip("Sau bao lau khong nhan duoc du lieu moi thi coi track da roi vung theo doi. " +
+             "Day la 'khoang tho' chong nhay: lidar mat dau 1-2 frame van giu nguyen track " +
+             "thay vi xoa roi tao lai (gay giat/nhay o phia tieu thu).")]
+    public float signalTimeout = 0.3f;
 
+    [Tooltip("Khoang cach toi da (px man hinh) de mot diem phat hien moi duoc coi la CUNG track " +
+             "voi mot track dang co, thay vi tao track moi. Tang len neu lidar hay lam vi tri " +
+             "nhay qua nhieu giua cac frame khien track bi coi la nguoi moi lien tuc.")]
+    public float trackMatchRadius = 150f;
+
+    [Tooltip("Khoang cach toi da (px man hinh) de gop 2 diem phat hien trong CUNG 1 frame thanh " +
+             "1 nguoi duy nhat - xu ly truong hop lidar tach nham 1 nguoi thanh 2 diem gan nhau.")]
+    public float mergePersonDistance = 80f;
+
+    [Header("Khong gian tuong tac")]
     [Tooltip("RectTransform danh dau vung tuong tac (vd. mot rect stretch-full duoi Canvas). " +
              "UV (0..1,0..1) tu OSC duoc quy doi qua 4 goc cua rect nay. Bo trong = quy doi " +
              "truc tiep theo toan man hinh (Screen.width/height).")]
@@ -58,393 +53,226 @@ public class OscPersonTracker : MonoBehaviour
              "nguoc/xoay so voi man hinh, thay vi phai sua code.")]
     public CornerOrigin courtOrigin = CornerOrigin.BottomLeft;
 
-    [Header("Tracking")]
-    [Tooltip("Ban kinh (theo UV 0..1) de coi diem moi la CUNG 1 khach voi frame truoc. " +
-             "Qua nho = khach di nhanh bi coi la nguoi moi (nguon bong bong bi ngat/burst lai). " +
-             "Qua lon = 2 khach dung gan nhau bi nhap ID. Goi y: 0.05-0.12.")]
-    [Range(0.01f, 0.5f)] public float trackMatchRadius = 0.08f;
-
-    [Tooltip("Bo qua diem (0,0). TouchDesigner thuong gui 0,0 cho slot trong khi so nguoi giam.")]
-    public bool ignoreZeroPositions = true;
-
-    [Header("Chong nhay lidar")]
-    [Tooltip("⭐ CHONG NHAY (diem ma): khach MOI phai duoc thay lien tuc it nhat bay nhieu giay moi " +
-             "duoc tinh la nguoi that (moi co hieu ung/marker). Loc cac diem nhieu chi xuat hien " +
-             "1-2 frame (phan xa, tay vung, tuong). 0 = hien ngay. Goi y: 0.1-0.25s.")]
-    [Min(0f)] public float confirmTime = 0.15f;
-
-    [Tooltip("So lan (goi OSC) toi thieu phai nhan duoc trong confirmTime moi xac nhan khach moi.")]
-    [Min(1)] public int confirmMinHits = 3;
-
-    [Tooltip("⭐ CHONG RUNG: hang so thoi gian (giay) lam muot vi tri (loc mu). Lidar rung vai cm " +
-             "moi frame lam bong bong/marker giat. 0 = khong lam muot. Lon qua = tre so voi nguoi " +
-             "that. Goi y: 0.05-0.12s.")]
-    [Min(0f)] public float positionSmoothing = 0.08f;
-
-    [Header("Gop khach dung qua gan")]
-    [Tooltip("⭐ GOP: 2 diem (cung frame) hoac 2 khach dang track cach nhau DUOI ban kinh nay (UV 0..1) " +
-             "bi gop thanh 1 khach (giu ID cua nguoi vao truoc, vi tri = trung binh). Lidar hay tach 1 " +
-             "nguoi thanh 2 diem (2 chan, than + tay), hoac 2 nguoi dung sat nhau -> 2 nguon hieu " +
-             "ung chong len nhau. 0 = tat gop. Nen nho hon trackMatchRadius. Goi y: 0.03-0.06.")]
-    [Range(0f, 0.3f)] public float mergeRadius = 0.04f;
-
     [Header("Debug marker (hien thi vi tri tung khach dang track)")]
     [Tooltip("Prefab danh dau vi tri khach - dung de kiem tra/hieu chinh khi lap dat thuc te. " +
-             "Bo trong = khong hien thi marker nao. Marker CHI de xem, khong kich hoat hieu ung nao.")]
+             "Bo trong = khong hien thi marker nao.")]
     public GameObject debugMarkerPrefab;
     [Tooltip("Camera dung de quy doi screen -> world cho marker. Bo trong = Camera.main.")]
     public Camera debugMarkerCamera;
     [Tooltip("Do sau (world Z) dat marker.")]
     public float debugMarkerDepth = -3f;
 
-    [Header("Object debug trong scene (an/hien bang phim L, mac dinh TAT)")]
-    [Tooltip("Cac object CHI de debug (text huong dan, sprite danh dau, khung vung...). Chi bat/tat " +
-             "Renderer / UI Graphic / Canvas ben trong, KHONG SetActive GameObject, nen script va " +
-             "RectTransform tren do van chay binh thuong khi dang an.")]
-    public GameObject[] debugOnlyObjects;
-    [Tooltip("An/hien luon Image/Graphic cua spaceRect (khung vung tuong tac) theo phim L.")]
-    public bool spaceRectIsDebugVisual = true;
+    [Header("Debug HUD / Gizmos")]
+    [Tooltip("Bat/tat toan bo debug (OnGUI HUD + Gizmos + marker 3D). Bam phim L de doi nhanh " +
+             "luc Play - tat het truoc khi chay show that.")]
+    public bool showDebugVisuals = true;
 
-    [Header("Debug HUD (an/hien bang phim L - DebugOverlay, mac dinh TAT)")]
-    [Tooltip("Cho phep tracker nay ve bang trang thai OSC (port, so khach, toa do) khi bat debug " +
-             "bang phim L. Tat = khong bao gio ve HUD cua tracker nay.")]
-    public bool showDebugHud = true;
-    [Tooltip("Goc tren-trai cua bang HUD. Doi khi co nhieu tracker de bang khong chong len nhau.")]
-    public Vector2 debugHudOffset = new Vector2(10f, 10f);
-
-    // ── Registry toan cuc ────────────────────────────────────────────────────
-    static readonly List<OscPersonTracker> s_all = new List<OscPersonTracker>();
-    static int s_nextPersonId = 1;
-
-    /// <summary>Moi tracker dang enable trong scene.</summary>
-    public static IReadOnlyList<OscPersonTracker> All => s_all;
-
-    /// <summary>
-    /// Gom khach tu cac tracker duoc gan tay; neu mang rong/toan null thi lay tu moi tracker
-    /// trong scene. Ket qua ghi vao <paramref name="results"/> (duoc Clear truoc).
-    /// </summary>
-    public static void CollectPeople(OscPersonTracker[] trackers, List<Person> results)
-    {
-        results.Clear();
-        bool anyAssigned = false;
-        if (trackers != null)
-        {
-            foreach (var tracker in trackers)
-            {
-                if (tracker == null || !tracker.isActiveAndEnabled) continue;
-                anyAssigned = true;
-                results.AddRange(tracker._people);
-            }
-        }
-        if (anyAssigned) return;
-
-        foreach (var tracker in s_all)
-            results.AddRange(tracker._people);
-    }
-
-    // ── API tung tracker ─────────────────────────────────────────────────────
-    public IReadOnlyList<Person> People => _people;
-    public int ActivePersonCount => _people.Count;
-    public IReadOnlyList<Vector2> ActiveScreenPositions => _screenPositions; // giu cho code cu
-
-    class Track
-    {
-        public int id;
-        public Vector2 uv;          // vi tri da lam muot - cai ma script tieu thu thay
-        public Vector2 targetUv;    // trung binh cac diem tho gop vao track trong frame OSC gan nhat
-        Vector2 _frameSum;
-        int _frameCount;
-        public float lastSeen;
-        public float firstSeen;
-        public int hits;
-        public bool confirmed;
-        public GameObject marker;
-
-        public void BeginFrame(Vector2 raw)
-        {
-            _frameSum = raw;
-            _frameCount = 1;
-            targetUv = raw;
-        }
-
-        public void MergeInFrame(Vector2 raw)
-        {
-            _frameSum += raw;
-            _frameCount++;
-            targetUv = _frameSum / _frameCount;
-        }
-    }
+    // Doc tu _positionsCache (khong phai _tracks.Count truc tiep) de luon dong bo tuyet doi voi
+    // ActiveScreenPositions/ActiveTracks - tranh IndexOutOfRange khi component khac doc gia tri
+    // nay TRUOC luc OscPersonTracker.Update() kip chay lai trong cung 1 frame (thu tu Update()
+    // giua cac component la tuy y trong Unity, khong dam bao truoc).
+    public int ActivePersonCount => _positionsCache.Count;
+    public IReadOnlyList<Vector2> ActiveScreenPositions => _positionsCache;
+    /// <summary>Vi tri kem id on dinh cua tung track - dung cho he thong can 1 nguon phat
+    /// (vd. bong bong) rieng cho tung khach thay vi gop chung ve 1 diem.</summary>
+    public IReadOnlyList<(int id, Vector2 screenPos)> ActiveTracks => _tracksCache;
 
     MiniOscReceiver _receiver;
     readonly List<Track> _tracks = new List<Track>();
-    readonly List<Person> _people = new List<Person>();
-    readonly List<Vector2> _screenPositions = new List<Vector2>();
-    readonly HashSet<int> _claimed = new HashSet<int>();
+    readonly List<Vector2> _positionsCache = new List<Vector2>();
+    readonly List<(int id, Vector2 screenPos)> _tracksCache = new List<(int, Vector2)>();
+    readonly List<GameObject> _markers = new List<GameObject>();
+    int _nextTrackId;
 
-    const int MaxPeoplePerFrame = 64;
-    readonly float[] _bufX = new float[MaxPeoplePerFrame];
-    int _xIdx, _yIdx, _expectedCount;
-    float _lastCountTime = float.NegativeInfinity;
-
+    // Ho tro toi ~100 khach cung luc (co du du phong) - protocol OSC gui /person/count
+    // roi lan luot x/y cho tung nguoi, can bien du lon de khong bi cat bot khi dong.
+    const int MaxTrackedPersons = 128;
+    readonly float[] _bufX = new float[MaxTrackedPersons];
+    readonly Vector2[] _batchBuffer = new Vector2[MaxTrackedPersons];
     readonly Vector3[] _rectCorners = new Vector3[4];
-    GUIStyle _hudHeader, _hudBody;
+    int _idx;
+    int _expectedCount;
 
-    void Awake()
-    {
-        _receiver = GetComponent<MiniOscReceiver>();
-        DebugOverlay.VisibilityChanged += ApplyDebugObjectVisibility;
-        ApplyDebugObjectVisibility(DebugOverlay.Visible);
-    }
+    readonly Queue<string> _recentData = new Queue<string>(6);
+    readonly Queue<string> _logs = new Queue<string>(8);
 
-    void OnDestroy() => DebugOverlay.VisibilityChanged -= ApplyDebugObjectVisibility;
-
-    void ApplyDebugObjectVisibility(bool visible)
-    {
-        if (debugOnlyObjects != null)
-            foreach (var go in debugOnlyObjects)
-                if (go != null) SetVisualsEnabled(go, visible);
-
-        if (spaceRectIsDebugVisual && spaceRect != null)
-            SetVisualsEnabled(spaceRect.gameObject, visible);
-    }
-
-    static void SetVisualsEnabled(GameObject root, bool visible)
-    {
-        foreach (var r in root.GetComponentsInChildren<Renderer>(true)) r.enabled = visible;
-        foreach (var g in root.GetComponentsInChildren<UnityEngine.UI.Graphic>(true)) g.enabled = visible;
-        // Canvas: chi tat canvas CON (khong tat root canvas cua ca UI that neu root duoc gan nham)
-        foreach (var c in root.GetComponentsInChildren<Canvas>(true))
-            if (!c.isRootCanvas || c.gameObject == root) c.enabled = visible;
-    }
-
-    // Doi so an toan ngay trong tracker (khong phu thuoc phien ban MiniOscReceiver):
-    // TD hay gui count dang float / toa do dang int -> (int)args[0] se nem InvalidCastException.
-    static bool TryGetFloat(object[] args, int index, out float value)
-    {
-        value = 0f;
-        if (args == null || index < 0 || index >= args.Length) return false;
-        switch (args[index])
-        {
-            case float f: value = f; return true;
-            case int i: value = i; return true;
-            case double d: value = (float)d; return true;
-            case long l: value = l; return true;
-            case bool bo: value = bo ? 1f : 0f; return true;
-            case string str:
-                return float.TryParse(str, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out value);
-            default: return false;
-        }
-    }
-
-    static bool TryGetInt(object[] args, int index, out int value)
-    {
-        value = 0;
-        if (!TryGetFloat(args, index, out float f)) return false;
-        value = Mathf.RoundToInt(f);
-        return true;
-    }
+    void Awake() => _receiver = GetComponent<MiniOscReceiver>();
 
     void OnEnable()
     {
         _receiver.OnOscMessage += OnMessage;
-        if (!s_all.Contains(this)) s_all.Add(this);
+        Application.logMessageReceived += OnLog;
     }
 
     void OnDisable()
     {
         _receiver.OnOscMessage -= OnMessage;
-        s_all.Remove(this);
-        foreach (var track in _tracks)
-            if (track.marker != null) Destroy(track.marker);
-        _tracks.Clear();
-        _people.Clear();
-        _screenPositions.Clear();
+        Application.logMessageReceived -= OnLog;
+        foreach (var marker in _markers)
+            if (marker != null) Destroy(marker);
+        _markers.Clear();
     }
 
     void Update()
     {
-        // Nguon gui KHONG co /person/count: coi moi frame Unity la 1 frame du lieu moi,
-        // neu khong 2 con tro x/y tang mai va ngung nhan sau MaxPeoplePerFrame diem.
-        if (Time.time - _lastCountTime > 1f)
-        {
-            _xIdx = _yIdx = 0;
-            _claimed.Clear();
-        }
+        if (WasDebugToggleKeyPressed())
+            showDebugVisuals = !showDebugVisuals;
 
-        float now = Time.time;
-
+        // Bo cac track qua signalTimeout khong co du lieu moi - "khoang tho" chong nhay khi
+        // lidar mat dau nguoi 1-2 frame roi thay lai, thay vi xoa/tao lai track ngay lap tuc.
         for (int i = _tracks.Count - 1; i >= 0; i--)
+            if (Time.time - _tracks[i].lastSeen > signalTimeout)
+                _tracks.RemoveAt(i);
+
+        _positionsCache.Clear();
+        _tracksCache.Clear();
+        for (int i = 0; i < _tracks.Count; i++)
         {
-            Track track = _tracks[i];
-            float sinceSeen = now - track.lastSeen;
-
-            // Diem ma chua kip xac nhan ma da mat -> bo ngay, khong cho grace
-            bool expired = track.confirmed
-                ? sinceSeen > signalTimeout
-                : sinceSeen > Mathf.Max(confirmTime, 0.1f);
-            if (expired)
-            {
-                RemoveTrackAt(i);
-                continue;
-            }
-
-            if (!track.confirmed && now - track.firstSeen >= confirmTime && track.hits >= confirmMinHits)
-                track.confirmed = true;
-
-            // Lam muot: chi tien ve targetUv khi con dang thay (trong grace thi dung yen tai cho cu)
-            track.uv = positionSmoothing > 0f
-                ? Vector2.Lerp(track.uv, track.targetUv, 1f - Mathf.Exp(-Time.deltaTime / positionSmoothing))
-                : track.targetUv;
-        }
-
-        MergeCloseTracks();
-
-        // Quy doi UV -> screen MOI FRAME (khong chi luc nhan goi) de doi do phan giai /
-        // di chuyen spaceRect van dung vi tri ngay. Chi khach DA XAC NHAN moi lo ra ngoai.
-        GetScreenCorners(out Vector2 bl, out Vector2 tl, out Vector2 tr, out Vector2 br);
-        _people.Clear();
-        _screenPositions.Clear();
-        foreach (var track in _tracks)
-        {
-            if (!track.confirmed) continue;
-            Vector2 screen = UvToScreen(track.uv, bl, tl, tr, br);
-            _people.Add(new Person(track.id, track.uv, screen, track.firstSeen));
-            _screenPositions.Add(screen);
+            _positionsCache.Add(_tracks[i].screenPos);
+            _tracksCache.Add((_tracks[i].id, _tracks[i].screenPos));
         }
 
         SyncDebugMarkers();
     }
 
-    /// <summary>
-    /// 2 khach dang track troi vao sat nhau (&lt; mergeRadius) -> gop lam 1, giu khach vao truoc
-    /// (ID cu, uu tien khach da xac nhan) de hieu ung dang chay cua ho khong bi ngat.
-    /// </summary>
-    void MergeCloseTracks()
+    static bool WasDebugToggleKeyPressed()
     {
-        if (mergeRadius <= 0f) return;
-        float r2 = mergeRadius * mergeRadius;
+#if ENABLE_INPUT_SYSTEM
+        if (Keyboard.current != null && Keyboard.current.lKey.wasPressedThisFrame)
+            return true;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.L);
+#else
+        return false;
+#endif
+    }
 
-        for (int i = _tracks.Count - 1; i >= 1; i--)
+    void SyncDebugMarkers()
+    {
+        if (!showDebugVisuals || debugMarkerPrefab == null)
         {
-            for (int j = i - 1; j >= 0; j--)
-            {
-                Track a = _tracks[i], b = _tracks[j];
-                if ((a.uv - b.uv).sqrMagnitude > r2) continue;
+            foreach (var marker in _markers)
+                if (marker != null) marker.SetActive(false);
+            return;
+        }
 
-                bool keepB = b.confirmed != a.confirmed ? b.confirmed : b.firstSeen <= a.firstSeen;
-                Track keep = keepB ? b : a;
-                Track drop = keepB ? a : b;
-                keep.targetUv = (keep.targetUv + drop.targetUv) * 0.5f;
-                keep.lastSeen = Mathf.Max(keep.lastSeen, drop.lastSeen);
-                keep.hits += drop.hits;
+        Camera cam = debugMarkerCamera != null ? debugMarkerCamera : Camera.main;
+        if (cam == null) return;
 
-                RemoveTrackAt(keepB ? i : j);
-                if (!keepB) i--; // j < i da bi xoa -> chi so cua a lui 1
-                break;
-            }
+        while (_markers.Count < _tracks.Count)
+            _markers.Add(Instantiate(debugMarkerPrefab, transform));
+
+        for (int i = 0; i < _markers.Count; i++)
+        {
+            bool active = i < _tracks.Count;
+            _markers[i].SetActive(active);
+            if (!active) continue;
+
+            Vector2 sp = _tracks[i].screenPos;
+            float distanceFromCamera = debugMarkerDepth - cam.transform.position.z;
+            _markers[i].transform.position = cam.ScreenToWorldPoint(
+                new Vector3(sp.x, sp.y, distanceFromCamera));
         }
     }
-
-    void RemoveTrackAt(int index)
-    {
-        Track track = _tracks[index];
-        if (track.marker != null) Destroy(track.marker);
-        _claimed.Remove(track.id);
-        _tracks.RemoveAt(index);
-    }
-
-    // ── OSC ──────────────────────────────────────────────────────────────────
 
     void OnMessage(string address, object[] args)
     {
         switch (address)
         {
             case "/person/count":
-                // Bat dau 1 frame du lieu moi tu TD
-                TryGetInt(args, 0, out _expectedCount);
-                _lastCountTime = Time.time;
-                _xIdx = _yIdx = 0;
-                _claimed.Clear();
+                _expectedCount = Mathf.Clamp((int)args[0], 0, _batchBuffer.Length);
+                _idx = 0;
+                foreach (var t in _tracks) t.claimedThisBatch = false;
                 break;
-
             case "/person/x":
-                // Ho tro ca 1 gia tri/goi lan nhieu gia tri/goi (mang x0 x1 x2...)
-                for (int a = 0; a < args.Length; a++)
-                {
-                    if (!TryGetFloat(args, a, out float x)) continue;
-                    if (_xIdx < _bufX.Length) _bufX[_xIdx] = x;
-                    _xIdx++;
-                }
+                if (_idx < _bufX.Length) _bufX[_idx] = (float)args[0];
                 break;
-
             case "/person/y":
-                for (int a = 0; a < args.Length; a++)
+                if (_idx < _batchBuffer.Length)
                 {
-                    if (!TryGetFloat(args, a, out float y)) continue;
-                    int i = _yIdx++;
-                    if (i >= _bufX.Length || i >= _xIdx) continue; // chua co x tuong ung
-                    if (_expectedCount > 0 && i >= _expectedCount) continue;
-
-                    var uv = new Vector2(_bufX[i], y);
-                    if (ignoreZeroPositions && uv.x == 0f && uv.y == 0f) continue;
-                    MatchOrCreateTrack(uv);
+                    Vector2 uv = new Vector2(_bufX[_idx], (float)args[0]);
+                    Vector2 screenPos = UvToScreen(uv);
+                    _batchBuffer[_idx] = screenPos;
+                    LogRecent(_idx, uv, screenPos);
                 }
+                _idx++;
+                if (_idx >= _expectedCount) ProcessBatch(_expectedCount);
                 break;
         }
     }
 
-    void MatchOrCreateTrack(Vector2 uv)
+    // Gop cac diem qua gan trong CUNG 1 frame (1 nguoi bi lidar tach nham thanh nhieu diem),
+    // roi khop tung diem da gop voi track gan nhat dang co de giu danh tinh on dinh qua cac frame.
+    void ProcessBatch(int n)
     {
-        // (1) Diem tho nam sat 1 khach DA nhan diem trong frame OSC nay -> cung 1 nguoi bi lidar
-        //     tach doi (2 chan, than + tay) hoac 2 nguoi dung sat nhau: gop, khong tao khach moi.
-        if (mergeRadius > 0f)
+        // ponytail: gop theo kieu greedy (moi diem gop voi tat ca diem con lai trong ban kinh),
+        // khong phai clustering chuan - du dung neu moi nguoi chi tach thanh toi da vai diem gan
+        // nhau; nang cap len union-find/k-means neu lidar nhieu qua muc nay.
+        var used = new bool[n];
+        for (int i = 0; i < n; i++)
         {
-            float mergeD2 = mergeRadius * mergeRadius;
-            foreach (var track in _tracks)
+            if (used[i]) continue;
+            used[i] = true;
+            Vector2 sum = _batchBuffer[i];
+            int count = 1;
+            for (int j = i + 1; j < n; j++)
             {
-                if (!_claimed.Contains(track.id)) continue;
-                if ((track.targetUv - uv).sqrMagnitude > mergeD2) continue;
-                track.MergeInFrame(uv);
-                return;
+                if (used[j]) continue;
+                if (Vector2.Distance(_batchBuffer[i], _batchBuffer[j]) <= mergePersonDistance)
+                {
+                    sum += _batchBuffer[j];
+                    count++;
+                    used[j] = true;
+                }
             }
+            MatchOrCreateTrack(sum / count);
         }
+    }
 
-        // (2) Khop voi khach gan nhat chua nhan diem trong frame nay (ke ca khach dang trong
-        //     grace signalTimeout -> lidar mat dau roi thay lai van giu dung ID, khong nhay).
+    void MatchOrCreateTrack(Vector2 pos)
+    {
         Track best = null;
-        float bestD2 = trackMatchRadius * trackMatchRadius;
-        foreach (var track in _tracks)
+        float bestDist = trackMatchRadius;
+        foreach (var t in _tracks)
         {
-            if (_claimed.Contains(track.id)) continue; // moi track chi nhan 1 diem / frame
-            float d2 = (track.uv - uv).sqrMagnitude;
-            if (d2 < bestD2) { bestD2 = d2; best = track; }
+            if (t.claimedThisBatch) continue;
+            float d = Vector2.Distance(t.screenPos, pos);
+            if (d <= bestDist) { bestDist = d; best = t; }
         }
 
-        // (3) Khach moi - chua lo ra ngoai cho toi khi du confirmTime/confirmMinHits
         if (best == null)
         {
-            best = new Track { id = s_nextPersonId++, firstSeen = Time.time, uv = uv };
+            best = new Track { id = _nextTrackId++ };
             _tracks.Add(best);
         }
 
-        best.BeginFrame(uv);
+        best.screenPos = pos;
         best.lastSeen = Time.time;
-        best.hits++;
-        _claimed.Add(best.id);
+        best.claimedThisBatch = true;
     }
 
-    // ── Quy doi toa do ───────────────────────────────────────────────────────
+    void LogRecent(int index, Vector2 uv, Vector2 screenPos)
+    {
+        string entry = $"[{Time.time:F1}s] p[{index}] uv=({uv.x:F3},{uv.y:F3}) screen=({screenPos.x:F0},{screenPos.y:F0})";
+        if (_recentData.Count >= 6) _recentData.Dequeue();
+        _recentData.Enqueue(entry);
+    }
 
-    public Vector2 UvToScreen(Vector2 uv)
+    void OnLog(string condition, string stackTrace, LogType type)
+    {
+        if (type != LogType.Error && type != LogType.Exception) return;
+        string prefix = type == LogType.Exception ? "<EXC> " : "<ERR> ";
+        string line = $"[{Time.time:F1}s] {prefix}{condition}";
+        if (_logs.Count >= 8) _logs.Dequeue();
+        _logs.Enqueue(line);
+    }
+
+    Vector2 UvToScreen(Vector2 uv)
     {
         GetScreenCorners(out Vector2 bl, out Vector2 tl, out Vector2 tr, out Vector2 br);
-        return UvToScreen(uv, bl, tl, tr, br);
-    }
-
-    Vector2 UvToScreen(Vector2 uv, Vector2 bl, Vector2 tl, Vector2 tr, Vector2 br)
-    {
         RemapByCourtOrigin(bl, tl, tr, br, out Vector2 origin, out Vector2 uEnd, out Vector2 vEnd, out Vector2 diagonal);
+
         Vector2 uEdge = Vector2.Lerp(origin, uEnd, uv.x);
         Vector2 vEdge = Vector2.Lerp(vEnd, diagonal, uv.x);
         return Vector2.Lerp(uEdge, vEdge, uv.y);
@@ -463,22 +291,11 @@ public class OscPersonTracker : MonoBehaviour
 
         // GetWorldCorners: [0]=BL, [1]=TL, [2]=TR, [3]=BR
         spaceRect.GetWorldCorners(_rectCorners);
-        Camera cam = GetCanvasCamera();
+        Camera cam = spaceRect.GetComponentInParent<Canvas>()?.worldCamera;
         bl = RectTransformUtility.WorldToScreenPoint(cam, _rectCorners[0]);
         tl = RectTransformUtility.WorldToScreenPoint(cam, _rectCorners[1]);
         tr = RectTransformUtility.WorldToScreenPoint(cam, _rectCorners[2]);
         br = RectTransformUtility.WorldToScreenPoint(cam, _rectCorners[3]);
-    }
-
-    Camera GetCanvasCamera()
-    {
-        // Canvas Overlay: bat buoc truyen null (ke ca khi worldCamera co gan) - neu khong
-        // WorldToScreenPoint se chieu sai. Canvas Camera/World: dung camera cua root canvas.
-        Canvas canvas = spaceRect.GetComponentInParent<Canvas>();
-        if (canvas == null) return null;
-        canvas = canvas.rootCanvas;
-        if (canvas.renderMode == RenderMode.ScreenSpaceOverlay) return null;
-        return canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
     }
 
     // origin = goc UV(0,0), uEnd = huong tang U, vEnd = huong tang V, diagonal = goc doi dien origin
@@ -494,56 +311,16 @@ public class OscPersonTracker : MonoBehaviour
         }
     }
 
-    // ── Debug marker ─────────────────────────────────────────────────────────
-
-    void SyncDebugMarkers()
-    {
-        Camera cam = debugMarkerCamera != null ? debugMarkerCamera : Camera.main;
-
-        bool show = DebugOverlay.Visible && debugMarkerPrefab != null && cam != null;
-        int personIndex = 0;
-
-        for (int i = 0; i < _tracks.Count; i++)
-        {
-            Track track = _tracks[i];
-            if (!track.confirmed) continue;
-            Vector2 sp = _people[personIndex++].ScreenPosition;
-
-            if (!show)
-            {
-                if (track.marker != null && track.marker.activeSelf) track.marker.SetActive(false);
-                continue;
-            }
-
-            // Marker gan theo ID nen di theo DUNG nguoi do; khong parent vao tracker de
-            // khong bi an theo scale/rotation cua GameObject nay.
-            if (track.marker == null)
-            {
-                track.marker = Instantiate(debugMarkerPrefab);
-                track.marker.name = $"{name}_Person_{track.id}";
-            }
-            if (!track.marker.activeSelf) track.marker.SetActive(true);
-
-            float distanceFromCamera = debugMarkerDepth - cam.transform.position.z;
-            track.marker.transform.position = cam.ScreenToWorldPoint(
-                new Vector3(sp.x, sp.y, distanceFromCamera));
-        }
-    }
-
-    // ── HUD ──────────────────────────────────────────────────────────────────
-
     void OnGUI()
     {
-        if (!showDebugHud || !DebugOverlay.Visible) return;
+        if (!showDebugVisuals) return;
 
-        _hudHeader ??= new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold };
-        _hudBody ??= new GUIStyle(GUI.skin.label) { fontSize = 12 };
-        var h = _hudHeader;
-        var b = _hudBody;
-        float x = debugHudOffset.x, y = debugHudOffset.y;
+        var h = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold };
+        var b = new GUIStyle(GUI.skin.label) { fontSize = 12 };
+        float x = 10f, y = 10f;
 
         h.normal.textColor = Color.white;
-        GUI.Label(new Rect(x, y, 400, 22), $"-- OscPersonTracker ({name}) --", h);
+        GUI.Label(new Rect(x, y, 400, 22), "-- OscPersonTracker --", h);
         y += 22;
 
         bool bound = _receiver != null && _receiver.PortBound;
@@ -558,37 +335,64 @@ public class OscPersonTracker : MonoBehaviour
         b.normal.textColor = receiving ? Color.green : Color.yellow;
         string lastMsg = sinceLast >= 0f ? $"{sinceLast:F1}s truoc" : "chua co";
         GUI.Label(new Rect(x, y, 400, 20), $"Nhan du lieu: {(receiving ? "CO" : "khong")} (lan cuoi: {lastMsg})", b);
-        y += 18;
+        y += 24;
 
-        y += 6;
+        h.normal.textColor = Color.red;
+        GUI.Label(new Rect(x, y, 500, 22), $"-- Vung track (origin={courtOrigin}) --", h);
+        y += 22;
+        b.normal.textColor = Color.white;
+        if (spaceRect != null)
+        {
+            GetScreenCorners(out var bl, out var tl, out var tr, out var br);
+            GUI.Label(new Rect(x, y, 500, 18), $"BL=({bl.x:F0},{bl.y:F0})  TL=({tl.x:F0},{tl.y:F0})", b); y += 16;
+            GUI.Label(new Rect(x, y, 500, 18), $"BR=({br.x:F0},{br.y:F0})  TR=({tr.x:F0},{tr.y:F0})", b); y += 16;
+        }
+        else
+        {
+            b.normal.textColor = Color.gray;
+            GUI.Label(new Rect(x, y, 500, 18), $"Chua gan spaceRect - dung toan man hinh {Screen.width}x{Screen.height}", b); y += 16;
+        }
+        y += 8;
 
         h.normal.textColor = Color.cyan;
-        GUI.Label(new Rect(x, y, 400, 22), $"-- Khach dang track: {_people.Count} --", h);
+        GUI.Label(new Rect(x, y, 400, 22), $"-- Khach dang track: {ActivePersonCount} --", h);
         y += 22;
-
         b.normal.textColor = Color.white;
-        foreach (var person in _people)
+        for (int i = 0; i < _tracks.Count; i++)
         {
-            GUI.Label(new Rect(x, y, 500, 18),
-                $"  id={person.Id} uv=({person.Uv.x:F3},{person.Uv.y:F3}) screen=({person.ScreenPosition.x:F0},{person.ScreenPosition.y:F0})", b);
+            var t = _tracks[i];
+            GUI.Label(new Rect(x, y, 600, 18),
+                $"  id={t.id} screen=({t.screenPos.x:F0},{t.screenPos.y:F0}) lastSeen={Time.time - t.lastSeen:F2}s truoc", b);
+            y += 16;
+        }
+        y += 8;
+
+        h.normal.textColor = Color.gray;
+        GUI.Label(new Rect(x, y, 400, 20), "-- Du lieu gan day --", h);
+        y += 20;
+        b.normal.textColor = new Color(0.8f, 0.8f, 0.8f);
+        foreach (var entry in _recentData) { GUI.Label(new Rect(x, y, 700, 18), entry, b); y += 16; }
+        y += 8;
+
+        h.normal.textColor = Color.white;
+        GUI.Label(new Rect(x, y, 400, 20), "-- Log loi --", h);
+        y += 20;
+        foreach (var entry in _logs)
+        {
+            b.normal.textColor = entry.Contains("<EXC>") ? Color.red : Color.yellow;
+            GUI.Label(new Rect(x, y, 700, 18), entry, b);
             y += 16;
         }
         y += 8;
 
         b.normal.textColor = Color.gray;
-        int pending = _tracks.Count - _people.Count;
-        if (pending > 0)
-        {
-            GUI.Label(new Rect(x, y, 400, 18), $"  (+{pending} diem dang cho xac nhan)", b);
-            y += 18;
-        }
-        GUI.Label(new Rect(x, y, 400, 18), "Bam L de an/hien debug", b);
+        GUI.Label(new Rect(x, y, 500, 18), "Bam L de an/hien toan bo debug (HUD + gizmos + marker)", b);
     }
 
 #if UNITY_EDITOR
     void OnDrawGizmos()
     {
-        if (spaceRect == null) return;
+        if (!showDebugVisuals || spaceRect == null) return;
 
         spaceRect.GetWorldCorners(_rectCorners);
         Vector3 bl = _rectCorners[0], tl = _rectCorners[1], tr = _rectCorners[2], br = _rectCorners[3];
@@ -599,6 +403,13 @@ public class OscPersonTracker : MonoBehaviour
         Gizmos.DrawLine(tr, br);
         Gizmos.DrawLine(br, bl);
 
+        float markerRadius = Vector3.Distance(bl, br) * 0.02f;
+        UnityEditor.Handles.color = Color.white;
+        UnityEditor.Handles.Label(bl, "BL");
+        UnityEditor.Handles.Label(tl, "TL");
+        UnityEditor.Handles.Label(tr, "TR");
+        UnityEditor.Handles.Label(br, "BR");
+
         Vector3 origin = courtOrigin switch
         {
             CornerOrigin.BottomLeft => bl,
@@ -606,7 +417,6 @@ public class OscPersonTracker : MonoBehaviour
             CornerOrigin.TopRight => tr,
             _ => br
         };
-        float markerRadius = Vector3.Distance(bl, br) * 0.02f;
         Gizmos.color = Color.yellow;
         Gizmos.DrawSphere(origin, markerRadius);
         UnityEditor.Handles.color = Color.yellow;
@@ -615,77 +425,15 @@ public class OscPersonTracker : MonoBehaviour
         if (Application.isPlaying)
         {
             Gizmos.color = Color.cyan;
-            foreach (var track in _tracks)
+            UnityEditor.Handles.color = Color.cyan;
+            for (int i = 0; i < _markers.Count && i < _tracks.Count; i++)
             {
-                if (track.marker == null || !track.marker.activeSelf) continue;
-                Gizmos.DrawWireSphere(track.marker.transform.position, markerRadius);
-                UnityEditor.Handles.Label(track.marker.transform.position + Vector3.up * markerRadius, $"id:{track.id}");
+                if (_markers[i] == null || !_markers[i].activeSelf) continue;
+                Vector3 pos = _markers[i].transform.position;
+                Gizmos.DrawWireSphere(pos, markerRadius);
+                UnityEditor.Handles.Label(pos + Vector3.up * markerRadius, $"id:{_tracks[i].id}");
             }
         }
     }
 #endif
-}
-
-/// <summary>
-/// Cong tac debug TOAN CUC: bam L de an/hien moi hien thi debug (HUD OSC, marker vi tri khach,
-/// debugOnlyObjects cua OscPersonTracker...). MAC DINH TAT moi lan vao Play / chay build, de
-/// exhibit that khong bao gio lo chu/marker debug khi vua bat may.
-/// Tu khoi tao (RuntimeInitializeOnLoadMethod) - khong can dat vao scene.
-/// Script khac: doc DebugOverlay.Visible, hoac dang ky DebugOverlay.VisibilityChanged.
-/// </summary>
-public static class DebugOverlay
-{
-    public static bool Visible { get; private set; }
-
-    /// <summary>Ban ra moi khi bat/tat (tham so = trang thai moi).</summary>
-    public static event Action<bool> VisibilityChanged;
-
-    public static void SetVisible(bool visible)
-    {
-        if (Visible == visible) return;
-        Visible = visible;
-        Debug.Log($"[DebugOverlay] Hien thi debug: {(visible ? "BAT" : "TAT")} (phim L)");
-        VisibilityChanged?.Invoke(visible);
-    }
-
-    public static void Toggle() => SetVisible(!Visible);
-
-    // Reset ca khi tat Domain Reload (Enter Play Mode Options) - static khong tu ve mac dinh
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetStatics()
-    {
-        Visible = false;
-        VisibilityChanged = null;
-    }
-
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    static void CreateKeyListener()
-    {
-        var go = new GameObject("[DebugOverlay]") { hideFlags = HideFlags.HideInHierarchy };
-        UnityEngine.Object.DontDestroyOnLoad(go);
-        go.AddComponent<DebugOverlayKeyListener>();
-    }
-
-    internal static bool WasToggleKeyPressed()
-    {
-#if ENABLE_INPUT_SYSTEM
-        if (Keyboard.current != null && Keyboard.current.lKey.wasPressedThisFrame)
-            return true;
-#endif
-#if ENABLE_LEGACY_INPUT_MANAGER
-        return Input.GetKeyDown(KeyCode.L);
-#else
-        return false;
-#endif
-    }
-}
-
-/// <summary>Chi de nghe phim L moi frame cho DebugOverlay (tao tu dong, an khoi Hierarchy).</summary>
-sealed class DebugOverlayKeyListener : MonoBehaviour
-{
-    void Update()
-    {
-        if (DebugOverlay.WasToggleKeyPressed())
-            DebugOverlay.Toggle();
-    }
 }

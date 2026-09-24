@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using DG.Tweening;
 using UnityEngine;
 
 /// <summary>
@@ -373,14 +372,6 @@ public class OceanBubbleSystem : MonoBehaviour
              "Các mảnh này cũng tính vào maxAlive.")]
     public Vector2Int shardCount = new Vector2Int(2, 5);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    [Header("HIỆU NĂNG")]
-
-    [Tooltip("Tự nới capacity của DOTween lúc Awake theo maxAlive (mỗi bong bóng dùng ~4 tween).\n\n" +
-             "Nếu tắt, hãy tự tăng capacity trong DOTween Utility Panel — nếu không DOTween sẽ tự grow " +
-             "và gây một nhịp cấp phát (GC spike) giữa lúc đang phun hạt.")]
-    public bool autoSetTweenCapacity = true;
-
     // ── Runtime ──────────────────────────────────────────────────────────────
     readonly Stack<OceanBubble> _pool = new Stack<OceanBubble>();
     readonly List<OceanBubble> _alive = new List<OceanBubble>(256);
@@ -394,9 +385,12 @@ public class OceanBubbleSystem : MonoBehaviour
         public float diveFizzAccumulator;
     }
 
-    readonly List<Emitter> _emitters = new List<Emitter>(8);
+    // Dictionary thay vì List: tra cứu/thêm/xoá O(1) — quan trọng khi có tới hàng chục,
+    // hàng trăm nguồn phát cùng lúc (nhiều khách qua OSC), tránh quét tuyến tính mỗi
+    // frame cho mỗi khách.
+    readonly Dictionary<int, Emitter> _emitters = new Dictionary<int, Emitter>(64);
     readonly Stack<Emitter> _emitterPool = new Stack<Emitter>();
-    readonly List<int> _stopBuffer = new List<int>(8);
+    readonly List<int> _stopBuffer = new List<int>(64);
 
     Transform _poolRoot;
 
@@ -406,9 +400,6 @@ public class OceanBubbleSystem : MonoBehaviour
 
     void Awake()
     {
-        if (autoSetTweenCapacity)
-            DOTween.SetTweensCapacity(Mathf.Max(1000, maxAlive * 4 + 200), 100);
-
         if (billboardCamera == null) billboardCamera = Camera.main;
 
         _poolRoot = new GameObject("[BubblePool]").transform;
@@ -434,39 +425,37 @@ public class OceanBubbleSystem : MonoBehaviour
     /// </summary>
     public void SetEmitPoint(int emitterId, Vector3? point)
     {
-        int index = FindEmitter(emitterId);
+        bool has = _emitters.TryGetValue(emitterId, out var e);
 
         if (point.HasValue)
         {
-            if (index < 0)
+            if (!has)
             {
-                var e = _emitterPool.Count > 0 ? _emitterPool.Pop() : new Emitter();
+                e = _emitterPool.Count > 0 ? _emitterPool.Pop() : new Emitter();
                 e.id = emitterId;
                 e.point = e.prevPoint = point.Value;
                 e.accumulator = 0f;
                 e.diveFizzAccumulator = 0f;
-                _emitters.Add(e);
+                _emitters[emitterId] = e;
                 if (autoBurstOnStartStop) Burst(point.Value, pressBurst, 1f, 1.25f);
                 if (spawnDiveFizzOnPress) SpawnDiveFizz(point.Value, diveFizzCount);
             }
             else
             {
-                var e = _emitters[index];
                 e.prevPoint = e.point;
                 e.point = point.Value;
             }
         }
-        else if (index >= 0)
+        else if (has)
         {
-            var e = _emitters[index];
-            _emitters.RemoveAt(index);
+            _emitters.Remove(emitterId);
             _emitterPool.Push(e);
             if (autoBurstOnStartStop) Burst(e.point, releaseBurst, 0.7f, 0.85f);
         }
     }
 
     /// <summary>Có đang có nguồn phát với id này không.</summary>
-    public bool HasEmitter(int emitterId) => FindEmitter(emitterId) >= 0;
+    public bool HasEmitter(int emitterId) => _emitters.ContainsKey(emitterId);
 
     /// <summary>
     /// Tắt (kèm release burst) mọi nguồn phát KHÔNG có trong <paramref name="keepIds"/>.
@@ -476,8 +465,8 @@ public class OceanBubbleSystem : MonoBehaviour
     public void StopEmittersExcept(HashSet<int> keepIds)
     {
         _stopBuffer.Clear();
-        foreach (var e in _emitters)
-            if (keepIds == null || !keepIds.Contains(e.id)) _stopBuffer.Add(e.id);
+        foreach (var kv in _emitters)
+            if (keepIds == null || !keepIds.Contains(kv.Key)) _stopBuffer.Add(kv.Key);
         foreach (int id in _stopBuffer) SetEmitPoint(id, null);
     }
 
@@ -486,13 +475,6 @@ public class OceanBubbleSystem : MonoBehaviour
 
     float EmitterRateScale =>
         shareRateBetweenEmitters && _emitters.Count > 1 ? 1f / _emitters.Count : 1f;
-
-    int FindEmitter(int emitterId)
-    {
-        for (int i = 0; i < _emitters.Count; i++)
-            if (_emitters[i].id == emitterId) return i;
-        return -1;
-    }
 
     /// <summary>Phụt một nhúm bong bóng tức thì tại một điểm.</summary>
     /// <param name="radiusMul">Nhân vào clusterRadius cho riêng cú burst này.</param>
@@ -517,8 +499,8 @@ public class OceanBubbleSystem : MonoBehaviour
         float time = Time.time;
 
         if (bubblePrefab != null)
-            for (int ei = 0; ei < _emitters.Count; ei++)
-                TickEmitter(_emitters[ei], dt);
+            foreach (var e in _emitters.Values)
+                TickEmitter(e, dt);
 
         // Billboard: tính 1 lần cho cả đám
         if (billboard && billboardCamera == null) billboardCamera = Camera.main;
@@ -712,10 +694,8 @@ public class OceanBubbleSystem : MonoBehaviour
 
     void OnDisable()
     {
-        foreach (var e in _emitters) _emitterPool.Push(e);
+        foreach (var e in _emitters.Values) _emitterPool.Push(e);
         _emitters.Clear();
-        for (int i = _alive.Count - 1; i >= 0; i--)
-            if (_alive[i] != null) _alive[i].KillTweens();
     }
 
 #if UNITY_EDITOR
@@ -723,7 +703,7 @@ public class OceanBubbleSystem : MonoBehaviour
     {
         if (Application.isPlaying && _emitters.Count > 0)
         {
-            foreach (var e in _emitters) DrawClusterGizmo(e.point);
+            foreach (var e in _emitters.Values) DrawClusterGizmo(e.point);
             return;
         }
         DrawClusterGizmo(transform.position);

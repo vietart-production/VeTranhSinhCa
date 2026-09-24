@@ -49,6 +49,11 @@ public class QRFolderScanner : MonoBehaviour
     public bool autoReleaseFish = true;
     [Tooltip("Thư mục lưu lại ảnh đã quét thay vì xoá, để dễ kiểm tra/test lại.")]
     public string scannedFolderPath = "Scanned_Folder";
+    [Tooltip("Thư mục chuyển ảnh scan LỖI (không đọc được QR, QR bị che, chưa có template...) tới, " +
+             "thay vì để chúng kẹt lại trong Executive_folder mãi mãi. Ảnh lỗi bị kẹt lại sẽ tiếp tục " +
+             "bị tính vào executionImageCount, làm cạn dần availableSlots (xem maxQueueSize) và cuối " +
+             "cùng làm hệ thống ngừng nhận ảnh mới dù hàng chờ cá còn trống.")]
+    public string failedFolderPath = "Failed_Folder";
     [Tooltip("Tự động quét/nhập ảnh mới mỗi X giây, không cần bấm phím I.")]
     [Min(0.5f)] public float autoImportIntervalSeconds = 1f;
 
@@ -159,6 +164,16 @@ public class QRFolderScanner : MonoBehaviour
         // ponytail: mac dinh 200 sequence khong du cho ~80+ ca (moi con tu
         // lap ScheduleNextTwist), tang truoc khi spawn de tranh warning.
         DOTween.SetTweensCapacity(500, 50);
+
+        // Executive_folder/Scanned_Folder phai luon ton tai canh file .exe (ResolveFolderPath
+        // tro ve thu muc CHUA .exe trong ban build) ngay tu dau, KHONG phu thuoc viec
+        // sourceFolderPath (D:\Images, chi co tren may dev) co ton tai hay khong - truoc day
+        // FillExecutionFolderIncrementally() la noi DUY NHAT tao Executive_folder, nhung no
+        // thoat som neu thieu D:\Images nen thu muc khong bao gio duoc tao tren may that,
+        // khien ImportImagesIncrementally() bao loi "Khong tim thay thu muc" moi giay (
+        // InvokeRepeating ben duoi) vinh vien.
+        Directory.CreateDirectory(ResolveFolderPath(folderPath));
+        Directory.CreateDirectory(ResolveFolderPath(scannedFolderPath));
 
         LoadImportLedger();
 
@@ -308,6 +323,7 @@ public class QRFolderScanner : MonoBehaviour
     {
         failedExecutionFiles.Add(file);
         Debug.LogError($"[QR] Xử lý thất bại '{Path.GetFileName(file)}': {error}");
+        ArchiveFailedFile(file);
     }
 
     [ContextMenu("Scan Folder Now")]
@@ -486,6 +502,11 @@ public class QRFolderScanner : MonoBehaviour
         {
             failedExecutionFiles.Add(file);
             Debug.LogError($"[QR] Xử lý thất bại '{Path.GetFileName(file)}': {exception.Message}");
+            // Chi don file neu day la anh scan dung mot lan (Executive_folder) - KHONG dung cho
+            // default_fish (deleteAfterProcessing=false o do), vi do la asset noi dung co dinh
+            // trong StreamingAssets, khong phai anh scan can don di.
+            if (deleteAfterProcessing)
+                ArchiveFailedFile(file);
             return false;
         }
         finally
@@ -1510,6 +1531,41 @@ public class QRFolderScanner : MonoBehaviour
         catch (Exception exception)
         {
             Debug.LogWarning($"[QR] Không thể lưu '{Path.GetFileName(file)}' vào Scanned_Folder: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Chuyen anh scan LOI ra khoi Executive_folder, giong het ArchiveScannedFile cho anh
+    /// THANH CONG. Bat buoc phai lam - neu khong anh loi se kep lai mai mai trong
+    /// Executive_folder, bi executionImageCount dem vao va lam can dan availableSlots
+    /// (xem CopySourceFiles/FillExecutionFolder) cho toi khi he thong ngung nhan anh moi
+    /// hoan toan, du hang cho ca (pendingFish) van con cho trong.
+    /// </summary>
+    void ArchiveFailedFile(string file)
+    {
+        try
+        {
+            string failedFolder = ResolveFolderPath(failedFolderPath);
+            Directory.CreateDirectory(failedFolder);
+            string destination = MakeUniqueDestination(failedFolder, Path.GetFileName(file));
+
+            const int maxAttempts = 6;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                try
+                {
+                    File.Move(file, destination);
+                    return;
+                }
+                catch (IOException) when (attempt < maxAttempts)
+                {
+                    System.Threading.Thread.Sleep(100);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"[QR] Không thể lưu '{Path.GetFileName(file)}' vào Failed_Folder: {exception.Message}");
         }
     }
 

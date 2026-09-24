@@ -24,7 +24,7 @@ public class BackgroundFishSpawner : MonoBehaviour
 
     [Header("Texture cá mặc định")]
     [Tooltip("Chỉ prefab có ít nhất một ảnh khớp tên trong thư mục này mới được spawn.")]
-    public string defaultTextureFolderPath = "Assets/default_fish";
+    public string defaultTextureFolderPath = "Assets/StreamingAssets/default_fish";
     public bool requireDefaultTexture = true;
 
     [Header("Do sang cua ca")]
@@ -83,17 +83,31 @@ public class BackgroundFishSpawner : MonoBehaviour
     [Header("Co nha tai tro")]
     public bool sponsorFlagEnabled = true;
     public Sprite sponsorFlagSprite;
-    [Min(0f)] public float sponsorFlagInitialDelay = 6f;
-    public Vector2 sponsorFlagVisibleDurationRange = new Vector2(10f, 16f);
-    public Vector2 sponsorFlagIntervalRange = new Vector2(18f, 32f);
+    [Min(0f)] public float sponsorFlagInitialDelay = 1f;
+    public Vector2 sponsorFlagVisibleDurationRange = new Vector2(6f, 8f);
+    public Vector2 sponsorFlagIntervalRange = new Vector2(2f, 4f);
+    [Tooltip("Z offset dua ca dang duoc chon ve phia camera. Trong scene nay Z nho hon la gan camera hon.")]
+    [Min(0f)] public float sponsorFlagFishDepthOffset = 0.75f;
+    [Tooltip("Flag nam tai pivot ca, voi Z lon hon Z cua than ca mot chut.")]
+    [Min(0.01f)] public float sponsorFlagDepthOffset = 0.08f;
     [Range(0.3f, 1.2f)] public float sponsorFlagWidthRatio = 0.68f;
     [Tooltip("Offset theo ti le rong/cao cua ca.")]
     public Vector2 sponsorFlagAnchorOffset = new Vector2(-0.08f, -0.03f);
+    [Tooltip("Ha chan flag tu dinh texture cua ca xuong mot chut.")]
+    [Min(0f)] public float sponsorFlagVerticalDrop = 0.1f;
     [Tooltip("Do sau chan cot co cam vao lung ca, theo ti le chieu cao ca.")]
     [Range(0f, 0.5f)] public float sponsorFlagBackInset = 0.22f;
     [Range(0.2f, 2f)] public float sponsorFlagRaiseDuration = 0.7f;
 
     [Header("Tuong tac click vao ca")]
+    [Tooltip("Doc interactionSource TRUC TIEP tu TouchOceanManager thay vi tu giu 1 cong tac Mouse/Osc " +
+             "rieng - truoc day 2 cong tac doc lap (1 cho bong bong, 1 cho click-ca) rat de bi set lech " +
+             "nhau (vd chi doi 1 trong 2 luc test bang chuot roi quen doi lai), khien bong bong theo tay " +
+             "chay dung nhung ca khong phan ung hoac nguoc lai. Gio ca scene chi con DUY NHAT 1 cong tac.")]
+    public TouchOceanManager touchOceanManager;
+    [Tooltip("Cac nguon vi tri khach qua OSC (co the gan nhieu neu co nhieu cam bien/vung track " +
+             "rieng biet). Bat buoc it nhat 1 phan tu khi interactionSource = Osc.")]
+    public OscPersonTracker[] oscTrackers;
     [Tooltip("Material bong bong URP dung cho vu no va dai bong bong.")]
     public Material clickBubbleMaterial;
     [Tooltip("Ca tang toc gap bao nhieu lan khi quay dau ve lai mep vua xuat phat - can du manh de ro rang la dang CHAY chu khong phai boi thong thuong.")]
@@ -110,15 +124,6 @@ public class BackgroundFishSpawner : MonoBehaviour
     public Vector2 clickBubbleSizeRange = new Vector2(0.1f, 0.22f);
     public Color clickBubbleColor = new Color(0.72f, 0.94f, 1f, 0.78f);
 
-    [Header("Tuong tac qua OSC (khach tham quan dung truoc man hinh)")]
-    [Tooltip("Khach tracking qua OSC cung doa ca nhu click chuot: ca boi ngang qua vi tri khach se giat minh bo chay.")]
-    public bool scareFishWithOsc = true;
-    [Tooltip("Cac nguon vi tri khach. De TRONG = tu dung moi OscPersonTracker dang bat trong scene.")]
-    public OscPersonTracker[] oscTrackers;
-    [Tooltip("Chu ky (giay) kiem tra va cham khach-ca. Khach di chuyen cham nen 10 lan/giay la du, " +
-             "va re hon nhieu so voi kiem tra moi frame cho moi khach x moi con ca.")]
-    [Range(0f, 0.5f)] public float oscScareCheckInterval = 0.1f;
-
     [Header("Chiều sâu")]
     [Tooltip("Khoảng Z của đàn cá. Z nhỏ hơn nằm gần camera hơn trong scene hiện tại.")]
     public Vector2 depthRange = new Vector2(-8f, -2f);
@@ -128,7 +133,8 @@ public class BackgroundFishSpawner : MonoBehaviour
     public Vector2 depthSpeedRange = new Vector2(1.1f, 0.7f);
 
     private readonly List<Vector2> occupiedScreenPositions = new List<Vector2>();
-    private readonly List<GameObject> sponsorFlagCandidates = new List<GameObject>();
+    private GameObject activeSponsorFlag;
+    private Coroutine sponsorFlagRoutine;
     private sealed class TexturedFishSource
     {
         public GameObject prefab;
@@ -136,43 +142,82 @@ public class BackgroundFishSpawner : MonoBehaviour
         public string fishId;
     }
 
-    private readonly List<OscPersonTracker.Person> oscPeople = new List<OscPersonTracker.Person>();
-    private float nextOscScareCheckTime;
-
     void Update()
     {
-        Camera camera = Camera.main;
+        if (WasSponsorFlagKeyPressed())
+            ShowSponsorFlagOnce();
 
-        // Chuot/cham va OSC chay SONG SONG (khong return som) de vua test bang chuot
-        // vua co khach that dung truoc man hinh.
-        if (TryReadPrimaryPointerPress(out Vector2 pressedPosition))
-            FishClickInteraction.TryTriggerAtScreenPosition(camera, pressedPosition);
-        else if (TryReadPrimaryPointerHold(out Vector2 heldPosition))
-            FishClickInteraction.TryTriggerAtScreenPosition(camera, heldPosition);
+        bool useMouse = touchOceanManager != null &&
+                         touchOceanManager.interactionSource == TouchOceanManager.InteractionSource.Mouse;
+        FishClickInteraction.MouseInteractionEnabled = useMouse;
 
-        if (scareFishWithOsc)
-            ScareFishAtOscPeople(camera);
-    }
-
-    void ScareFishAtOscPeople(Camera camera)
-    {
-        if (camera == null || Time.time < nextOscScareCheckTime)
+        if (!useMouse)
+        {
+            TriggerFishFromOsc();
             return;
-        nextOscScareCheckTime = Time.time + oscScareCheckInterval;
+        }
 
-        // Khach dung yen = giong giu chuot: ca nao boi vao vung khach thi giat minh.
-        // FishClickInteraction tu bo qua ca dang bo chay (isEscaping) nen khong bi kich lien tuc.
-        OscPersonTracker.CollectPeople(oscTrackers, oscPeople);
-        for (int i = 0; i < oscPeople.Count; i++)
-            FishClickInteraction.TryTriggerAtScreenPosition(camera, oscPeople[i].ScreenPosition);
+        if (TryReadPointerPress(0, out Vector2 pressedPosition))
+        {
+            FishClickInteraction.TryTriggerAtScreenPosition(
+                Camera.main,
+                pressedPosition,
+                FishClickInteraction.ClickSpinVariant.ReturnToOriginal);
+            return;
+        }
+
+        if (TryReadPointerPress(1, out pressedPosition))
+        {
+            FishClickInteraction.TryTriggerAtScreenPosition(
+                Camera.main,
+                pressedPosition,
+                FishClickInteraction.ClickSpinVariant.ReturnToOriginal);
+        }
     }
 
-    static bool TryReadPrimaryPointerPress(out Vector2 screenPosition)
+    void TriggerFishFromOsc()
+    {
+        if (oscTrackers == null)
+            return;
+
+        // Vi tri khach duoc theo doi lien tuc (khong co su kien "nhan/tha" nhu chuot), nen
+        // kiem tra moi frame: TryTriggerAtScreenPosition tu bo qua ca dang chay tron nen goi
+        // lap lai moi frame cho cung mot khach dung yen la an toan.
+        foreach (var tracker in oscTrackers)
+        {
+            if (tracker == null) continue;
+            var positions = tracker.ActiveScreenPositions;
+            for (int i = 0; i < tracker.ActivePersonCount; i++)
+            {
+                FishClickInteraction.TryTriggerAtScreenPosition(
+                    Camera.main,
+                    positions[i],
+                    FishClickInteraction.ClickSpinVariant.ReturnToOriginal);
+            }
+        }
+    }
+
+    static bool WasSponsorFlagKeyPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        if (Keyboard.current != null && Keyboard.current.pKey.wasPressedThisFrame)
+            return true;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.P);
+#else
+        return false;
+#endif
+    }
+
+    static bool TryReadPointerPress(int mouseButton, out Vector2 screenPosition)
     {
         screenPosition = default;
 
 #if ENABLE_INPUT_SYSTEM
-        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        if (Mouse.current != null &&
+            ((mouseButton == 0 && Mouse.current.leftButton.wasPressedThisFrame) ||
+             (mouseButton == 1 && Mouse.current.rightButton.wasPressedThisFrame)))
         {
             screenPosition = Mouse.current.position.ReadValue();
             return true;
@@ -187,7 +232,7 @@ public class BackgroundFishSpawner : MonoBehaviour
 #endif
 
 #if ENABLE_LEGACY_INPUT_MANAGER
-        if (Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(mouseButton))
         {
             screenPosition = Input.mousePosition;
             return true;
@@ -197,12 +242,14 @@ public class BackgroundFishSpawner : MonoBehaviour
         return false;
     }
 
-    static bool TryReadPrimaryPointerHold(out Vector2 screenPosition)
+    static bool TryReadPointerHold(int mouseButton, out Vector2 screenPosition)
     {
         screenPosition = default;
 
 #if ENABLE_INPUT_SYSTEM
-        if (Mouse.current != null && Mouse.current.leftButton.isPressed)
+        if (Mouse.current != null &&
+            ((mouseButton == 0 && Mouse.current.leftButton.isPressed) ||
+             (mouseButton == 1 && Mouse.current.rightButton.isPressed)))
         {
             screenPosition = Mouse.current.position.ReadValue();
             return true;
@@ -217,7 +264,7 @@ public class BackgroundFishSpawner : MonoBehaviour
 #endif
 
 #if ENABLE_LEGACY_INPUT_MANAGER
-        if (Input.GetMouseButton(0))
+        if (Input.GetMouseButton(mouseButton))
         {
             screenPosition = Input.mousePosition;
             return true;
@@ -264,7 +311,6 @@ public class BackgroundFishSpawner : MonoBehaviour
         Bounds bounds = spawnBounds.bounds;
         ResolveDepthRange(out float nearZ, out float farZ);
         occupiedScreenPositions.Clear();
-        sponsorFlagCandidates.Clear();
 
         TexturedFishSource smallFishSource = FindSmallFishSource(texturedSources);
         int schoolingFishCount = smallFishSource == null
@@ -305,9 +351,6 @@ public class BackgroundFishSpawner : MonoBehaviour
             sourceIndex++;
             spawnedCount++;
         }
-
-        if (sponsorFlagEnabled && sponsorFlagSprite != null && sponsorFlagCandidates.Count > 0)
-            StartCoroutine(SponsorFlagRoutine());
 
         Debug.Log($"[BackgroundFishSpawner] Đã tạo {spawnedCount}/{numberOfFishToSpawn} cá, " +
                   $"gồm {schoolingFishCount} ca_con đi theo đàn.");
@@ -359,14 +402,14 @@ public class BackgroundFishSpawner : MonoBehaviour
         GameObject schoolRoot = new GameObject($"CaConSchool_{schoolIndex}");
         schoolRoot.transform.SetParent(transform);
         schoolRoot.transform.position = position;
-
         DOTweenFishAnim prefabAnimation = source.prefab.GetComponent<DOTweenFishAnim>();
-        DOTweenFishAnim schoolAnimation = schoolRoot.AddComponent<DOTweenFishAnim>();
-        ConfigureCalmAnimation(schoolAnimation, laneIndex, position.z, nearZ, farZ, schoolIndex);
-        bool schoolFacesRight = prefabAnimation != null && prefabAnimation.spriteFacesRight;
-        schoolAnimation.spriteFacesRight = schoolFacesRight;
-        schoolAnimation.waveHeight = Mathf.Min(schoolAnimation.waveHeight, 0.55f);
-        schoolAnimation.swimLaneHeight01 = Mathf.Min(swimLaneHeight, 0.12f);
+        ConfigureRandomMotion(
+            schoolRoot,
+            source.fishId,
+            0.8f,
+            prefabAnimation == null || prefabAnimation.spriteFacesRight);
+
+        bool schoolFacesRight = prefabAnimation == null || prefabAnimation.spriteFacesRight;
 
         for (int i = 0; i < groupSize; i++)
         {
@@ -375,16 +418,12 @@ public class BackgroundFishSpawner : MonoBehaviour
 
             ApplyDefaultTexture(member, source);
 
-            DOTweenFishAnim memberAnimation = member.GetComponent<DOTweenFishAnim>();
-            if (memberAnimation != null)
-                memberAnimation.enabled = false;
-
             member.transform.localPosition = GetSchoolFormationOffset(i, schoolFacesRight);
             member.transform.localRotation = Quaternion.identity;
             NormalizeVisualWidth(
                 member,
                 Random.Range(schoolFishWidthRange.x, schoolFishWidthRange.y) * fishSizeMultiplier);
-            ConfigureClickInteraction(member);
+            ConfigureClickInteraction(member, source.fishId);
         }
     }
 
@@ -417,85 +456,24 @@ public class BackgroundFishSpawner : MonoBehaviour
                     Path.GetFileNameWithoutExtension(source.texturePath);
         ApplyDefaultTexture(fish, source);
 
+        fish.GetComponent<DOTweenFishAnim>()?.ConfigureStandardFishMotion(source.fishId);
+
         float depth01 = Mathf.InverseLerp(nearZ, farZ, position.z);
         float depthSize = Mathf.Lerp(depthScaleRange.x, depthScaleRange.y, depth01);
         bool isStarfish = source.fishId == "sao_bien";
-        bool isJellyfish = source.fishId == "sua";
-        // Ca_muc van boi binh thuong (dung DOTweenFishAnim), chi can khong
-        // gian rong de khong dong ken khi so luong ca nhieu.
-        bool isWideRoamer = source.fishId == "ca_muc";
-        bool isCrab = source.fishId == "cua";
-        bool isShrimp = source.fishId == "tom";
-        bool isSeahorse = source.fishId == "ca_ngua";
-        // Nhung loai khong co dang boi mo nuoc thong thuong: tu dieu khien
-        // transform bang script rieng, DOTweenFishAnim chi con tac dung nap
-        // thong so shader (mesh/material) trong Awake().
-        bool usesBespokeMotion = isJellyfish || isCrab || isShrimp || isSeahorse;
         Vector2 widthRange = isStarfish ? starfishWidthRange : targetFishWidthRange;
         float targetWidth = Random.Range(
             Mathf.Min(widthRange.x, widthRange.y),
             Mathf.Max(widthRange.x, widthRange.y)) * depthSize * fishSizeMultiplier;
         NormalizeVisualWidth(fish, targetWidth);
+        DOTweenFishAnim prefabAnimation = fish.GetComponent<DOTweenFishAnim>();
+        ConfigureRandomMotion(
+            fish,
+            source.fishId,
+            Mathf.Lerp(0.7f, 1.3f, 1f - depth01),
+            prefabAnimation == null || prefabAnimation.spriteFacesRight);
 
-        DOTweenFishAnim animation = fish.GetComponent<DOTweenFishAnim>();
-        if (animation != null)
-        {
-            if (usesBespokeMotion)
-            {
-                animation.enabled = false;
-            }
-            else
-            {
-                ConfigureCalmAnimation(animation, laneIndex, position.z, nearZ, farZ, fishIndex);
-            }
-            if (isStarfish)
-            {
-                Bounds bounds = spawnBounds.bounds;
-                animation.swimLaneCenter01 = Mathf.InverseLerp(
-                    bounds.min.y, bounds.max.y, position.y);
-                animation.swimLaneHeight01 = Mathf.Min(swimLaneHeight, 0.08f);
-                animation.swimSpeed *= starfishSpeedMultiplier;
-                animation.waveHeight = starfishWaveHeight;
-                animation.maxTiltAngle = Mathf.Min(animation.maxTiltAngle, 6f);
-            }
-            if (isWideRoamer)
-            {
-                // Ca_muc boi lan rong khap chieu cao ho thay vi bi bo hep
-                // trong 1 lan boi ngang nhu ca thuong, de khong dong ken.
-                animation.useSwimLane = false;
-                animation.waveHeight = fullRangeRoamWaveHeight;
-            }
-        }
-
-        if (isJellyfish)
-        {
-            JellyfishDriftAnim driftAnimation = fish.GetComponent<JellyfishDriftAnim>();
-            if (driftAnimation == null)
-                driftAnimation = fish.AddComponent<JellyfishDriftAnim>();
-            driftAnimation.Configure(spawnBounds);
-        }
-        else if (isCrab)
-        {
-            CrabScuttleAnim scuttleAnimation = fish.GetComponent<CrabScuttleAnim>();
-            if (scuttleAnimation == null)
-                scuttleAnimation = fish.AddComponent<CrabScuttleAnim>();
-            scuttleAnimation.Configure(spawnBounds, crabBottomHeightRange, crabPatrolHalfWidth);
-        }
-        else if (isShrimp)
-        {
-            ShrimpFlickAnim flickAnimation = fish.GetComponent<ShrimpFlickAnim>();
-            if (flickAnimation == null)
-                flickAnimation = fish.AddComponent<ShrimpFlickAnim>();
-            flickAnimation.Configure(spawnBounds);
-        }
-        else if (isSeahorse)
-        {
-            SeahorseHoverAnim hoverAnimation = fish.GetComponent<SeahorseHoverAnim>();
-            if (hoverAnimation == null)
-                hoverAnimation = fish.AddComponent<SeahorseHoverAnim>();
-            hoverAnimation.Configure(spawnBounds, seahorsePatrolRadius);
-        }
-        else if (source.fishId == "rua")
+        if (source.fishId == "rua")
         {
             // Mai rua cung, khong uon than: thay song lien tuc bang nhip
             // "vo manh roi luot" xen ke, lop len tren duong boi thong thuong.
@@ -511,38 +489,91 @@ public class BackgroundFishSpawner : MonoBehaviour
                 fish.AddComponent<AnglerLurePulse>();
         }
 
-        ConfigureClickInteraction(fish);
+        ConfigureClickInteraction(fish, source.fishId);
 
-        if (!isStarfish && !usesBespokeMotion)
-            sponsorFlagCandidates.Add(fish);
     }
 
-    IEnumerator SponsorFlagRoutine()
+    void ShowSponsorFlagOnce()
     {
-        if (sponsorFlagInitialDelay > 0f)
-            yield return new WaitForSeconds(sponsorFlagInitialDelay);
+        Debug.Log($"[SponsorFlag] Nhận phím P. Đang tìm mọi cá default/draw đang active, " +
+                  $"enabled={sponsorFlagEnabled}, sprite={(sponsorFlagSprite != null)}");
 
-        while (sponsorFlagEnabled)
+        if (!sponsorFlagEnabled)
         {
-            sponsorFlagCandidates.RemoveAll(candidate => candidate == null);
-            if (sponsorFlagSprite == null || sponsorFlagCandidates.Count == 0)
-                yield break;
-
-            GameObject fish = sponsorFlagCandidates[Random.Range(0, sponsorFlagCandidates.Count)];
-            GameObject flag = CreateSponsorFlag(fish);
-            float visibleDuration = Random.Range(
-                Mathf.Min(sponsorFlagVisibleDurationRange.x, sponsorFlagVisibleDurationRange.y),
-                Mathf.Max(sponsorFlagVisibleDurationRange.x, sponsorFlagVisibleDurationRange.y));
-
-            yield return new WaitForSeconds(Mathf.Max(0.5f, visibleDuration));
-            if (flag != null)
-                Destroy(flag);
-
-            float interval = Random.Range(
-                Mathf.Min(sponsorFlagIntervalRange.x, sponsorFlagIntervalRange.y),
-                Mathf.Max(sponsorFlagIntervalRange.x, sponsorFlagIntervalRange.y));
-            yield return new WaitForSeconds(Mathf.Max(0.5f, interval));
+            Debug.LogWarning("[SponsorFlag] Bỏ qua: sponsorFlagEnabled đang tắt.");
+            return;
         }
+
+        if (sponsorFlagSprite == null)
+        {
+            Debug.LogWarning("[SponsorFlag] Bỏ qua: chưa gán sponsorFlagSprite trong Inspector.");
+            return;
+        }
+
+        if (sponsorFlagRoutine != null || activeSponsorFlag != null)
+        {
+            Debug.Log("[SponsorFlag] Bỏ qua: flag trước vẫn đang hiển thị.");
+            return;
+        }
+
+        if (!FishClickInteraction.TryGetRandomActiveFish(
+                out GameObject fish, out int candidateCount))
+        {
+            Debug.LogWarning("[SponsorFlag] Bỏ qua: không có cá default/draw nào đang active.");
+            return;
+        }
+
+        Debug.Log($"[SponsorFlag] Chọn 1 cá ngẫu nhiên trong {candidateCount} cá active: '{fish.name}'.");
+        sponsorFlagRoutine = StartCoroutine(ShowSponsorFlagOnceRoutine(fish));
+    }
+
+    IEnumerator ShowSponsorFlagOnceRoutine(GameObject fish)
+    {
+        if (fish == null)
+        {
+            Debug.LogWarning("[SponsorFlag] Cá được chọn đã bị hủy trước khi tạo flag.");
+            sponsorFlagRoutine = null;
+            yield break;
+        }
+
+        float originalFishZ = fish.transform.position.z;
+        Vector3 raisedFishPosition = fish.transform.position;
+        raisedFishPosition.z -= sponsorFlagFishDepthOffset;
+        fish.transform.position = raisedFishPosition;
+
+        activeSponsorFlag = CreateSponsorFlag(fish);
+        if (activeSponsorFlag == null)
+            Debug.LogWarning($"[SponsorFlag] Không tạo được flag trên cá '{fish.name}'.");
+        else
+            Debug.Log($"[SponsorFlag] Đã tạo flag trên '{fish.name}', " +
+                      $"fishZ={fish.transform.position.z:F3}, " +
+                      $"flagZ={activeSponsorFlag.transform.position.z:F3}.");
+
+        float visibleDuration = Random.Range(
+            Mathf.Min(sponsorFlagVisibleDurationRange.x, sponsorFlagVisibleDurationRange.y),
+            Mathf.Max(sponsorFlagVisibleDurationRange.x, sponsorFlagVisibleDurationRange.y));
+
+        yield return new WaitForSeconds(Mathf.Max(0.5f, visibleDuration));
+        if (activeSponsorFlag != null)
+        {
+            SponsorFlagDisplay display = activeSponsorFlag.GetComponent<SponsorFlagDisplay>();
+            Tween exitTween = display != null
+                ? display.PlayExit(Mathf.Max(0.15f, sponsorFlagRaiseDuration * 0.5f))
+                : null;
+            if (exitTween != null)
+                yield return exitTween.WaitForCompletion();
+            Destroy(activeSponsorFlag);
+        }
+        if (fish != null)
+        {
+            Vector3 restoredPosition = fish.transform.position;
+            restoredPosition.z = originalFishZ;
+            fish.transform.position = restoredPosition;
+        }
+
+        Debug.Log($"[SponsorFlag] Kết thúc flag trên '{(fish != null ? fish.name : "<destroyed>")}'.");
+        activeSponsorFlag = null;
+        sponsorFlagRoutine = null;
     }
 
     GameObject CreateSponsorFlag(GameObject fish)
@@ -553,6 +584,10 @@ public class BackgroundFishSpawner : MonoBehaviour
         Renderer[] renderers = fish.GetComponentsInChildren<Renderer>(true);
         if (renderers.Length == 0 || sponsorFlagSprite.bounds.size.x <= 0.0001f)
             return null;
+
+        Transform flagPosition = FindFlagPosition(fish.transform);
+        if (flagPosition == null)
+            Debug.LogWarning($"[SponsorFlag] '{fish.name}' không có child FlagPos; dùng fallback trên texture.");
 
         Bounds fishBounds = renderers[0].bounds;
         for (int i = 1; i < renderers.Length; i++)
@@ -576,14 +611,14 @@ public class BackgroundFishSpawner : MonoBehaviour
             1f);
         flag.transform.localScale = localScale;
 
-        // Sprite pivot is placed at the bottom of the flag pole, so this world
-        // point is the exact contact point between pole and fish back.
-        Vector3 anchor = new Vector3(
-            fishBounds.center.x + fishBounds.size.x * sponsorFlagAnchorOffset.x,
-            fishBounds.max.y + fishBounds.size.y * sponsorFlagAnchorOffset.y,
-            fishBounds.center.z);
-        if (Camera.main != null)
-            anchor += Camera.main.transform.forward * 0.06f;
+        // FlagPos la moc dat san trong prefab; fallback dung dinh texture.
+        Vector3 anchor = flagPosition != null
+            ? flagPosition.position
+            : new Vector3(
+                fishBounds.center.x,
+                fishBounds.max.y - sponsorFlagVerticalDrop,
+                fish.transform.position.z);
+        anchor.z = fish.transform.position.z + sponsorFlagDepthOffset;
         flag.transform.position = anchor;
         flag.transform.rotation = Quaternion.identity;
 
@@ -592,11 +627,83 @@ public class BackgroundFishSpawner : MonoBehaviour
             localScale,
             sponsorFlagRaiseDuration,
             sponsorFlagAnchorOffset,
-            sponsorFlagBackInset);
+            sponsorFlagBackInset,
+            sponsorFlagDepthOffset,
+            sponsorFlagVerticalDrop,
+            flagPosition);
         return flag;
     }
 
+    static Transform FindFlagPosition(Transform fishRoot)
+    {
+        Transform[] children = fishRoot.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (children[i] != fishRoot &&
+                string.Equals(children[i].name, "FlagPos", StringComparison.OrdinalIgnoreCase))
+                return children[i];
+        }
+
+        return null;
+    }
+
     public void ConfigureClickInteraction(GameObject fish)
+    {
+        ConfigureClickInteraction(fish, fish.name);
+    }
+
+    void ConfigureRandomMotion(
+        GameObject fish,
+        string fishId,
+        float motionSpeed,
+        bool spriteFacesRight)
+    {
+        FishRandomMotion motion = fish.GetComponent<FishRandomMotion>();
+        if (motion == null)
+            motion = fish.AddComponent<FishRandomMotion>();
+
+        FishMotionSpecies motionSpecies = FishMotionSpecies.Horizontal;
+        float verticalRange = 0.9f;
+        string normalizedId = fishId != null ? fishId.ToLowerInvariant() : string.Empty;
+        if (normalizedId == "ca_ngua")
+        {
+            motionSpecies = FishMotionSpecies.Seahorse;
+            verticalRange = 1.4f;
+        }
+        else if (normalizedId == "sua")
+        {
+            motionSpecies = FishMotionSpecies.Jellyfish;
+            verticalRange = 1.2f;
+        }
+        else if (normalizedId == "tom")
+        {
+            motionSpecies = FishMotionSpecies.Shrimp;
+            verticalRange = 0.45f;
+        }
+        else if (normalizedId == "cua")
+        {
+            motionSpecies = FishMotionSpecies.Crab;
+            verticalRange = 0.2f;
+        }
+        else if (normalizedId == "sao_bien")
+        {
+            motionSpecies = FishMotionSpecies.Starfish;
+            verticalRange = 0.7f;
+        }
+        else if (normalizedId == "ca_muc")
+        {
+            verticalRange = 2.2f;
+        }
+
+        motion.Configure(
+            spawnBounds,
+            motionSpecies,
+            motionSpeed,
+            verticalRange,
+            spriteFacesRight);
+    }
+
+    public void ConfigureClickInteraction(GameObject fish, string fishId)
     {
         FishClickInteraction interaction = fish.GetComponent<FishClickInteraction>();
         if (interaction == null)
@@ -614,32 +721,18 @@ public class BackgroundFishSpawner : MonoBehaviour
             clickBubbleTrailSizeMultiplier,
             clickBubbleTrailSpread,
             clickBubbleSizeRange,
-            clickBubbleColor);
+            clickBubbleColor,
+            IsVerticalScalePulseFish(fishId));
     }
 
-    void ConfigureCalmAnimation(
-        DOTweenFishAnim animation,
-        int laneIndex,
-        float z,
-        float nearZ,
-        float farZ,
-        int directionSeed)
+    static bool IsVerticalScalePulseFish(string fishId)
     {
-        float depth01 = Mathf.InverseLerp(nearZ, farZ, z);
-        int laneTotal = Mathf.Max(3, swimLaneCount);
+        if (string.IsNullOrWhiteSpace(fishId))
+            return false;
 
-        // Nhan voi gia tri rieng cua prefab thay vi ghi de, de moi loai giu duoc
-        // ca tinh bam sinh (toc do, do lac) da tinh chinh rieng thay vi bi keo
-        // ve chung 1 dai gia tri nhu truoc day.
-        animation.swimBounds = spawnBounds;
-        animation.lifetime = 999999f;
-        animation.useSwimLane = true;
-        animation.swimLaneCenter01 = (laneIndex + 0.5f) / laneTotal;
-        animation.swimLaneHeight01 = swimLaneHeight;
-        animation.waveHeight *= Random.Range(calmWaveHeightRange.x, calmWaveHeightRange.y);
-        animation.swimSpeed *= Random.Range(calmSpeedRange.x, calmSpeedRange.y) *
-                               Mathf.Lerp(depthSpeedRange.x, depthSpeedRange.y, depth01);
-        animation.initialDirectionOverride = directionSeed % 2 == 0 ? 1 : -1;
+        string normalizedId = fishId.ToLowerInvariant();
+        return normalizedId == "sua" || normalizedId == "ca_ngua" ||
+               normalizedId == "tom" || normalizedId == "ca_muc";
     }
 
     Vector3 FindComfortablePosition(Bounds bounds, float nearZ, float farZ, int laneIndex)
@@ -866,8 +959,7 @@ public class BackgroundFishSpawner : MonoBehaviour
         }
         catch (Exception exception)
         {
-            Debug.LogError($"[BackgroundFishSpawner] Không thể gán '{Path.GetFileName(texturePath)}' " +
-                           $"cho '{fish.name}': {exception.Message}");
+            Debug.LogError($"[BackgroundFishSpawner] Không thể áp texture cho '{fish.name}': {exception.Message}");
             // Không bao giờ để prefab nét viền chưa tô xuất hiện nếu texture lỗi.
             fish.SetActive(false);
             Destroy(fish);
@@ -955,21 +1047,6 @@ public class BackgroundFishSpawner : MonoBehaviour
 }
 
 /// <summary>
-/// Marks a bespoke per-species motion script (in the spirit of the old
-/// JellyfishRiseAnim) that fully replaces DOTweenFishAnim's transform control.
-/// FishClickInteraction looks this up generically instead of hardcoding one
-/// concrete type, so it can startle whichever bespoke script a species uses -
-/// by reversing IN PLACE on its own patrol path, never detaching/disabling it
-/// (that used to require re-syncing state on resume, which is what caused
-/// fish to visibly snap once the flee ended).
-/// </summary>
-interface IStartleableFishMotion
-{
-    void Startle();
-}
-
-
-/// <summary>
 /// Keeps sponsor artwork upright and readable while its fish turns or tilts.
 /// </summary>
 sealed class SponsorFlagDisplay : MonoBehaviour
@@ -977,6 +1054,10 @@ sealed class SponsorFlagDisplay : MonoBehaviour
     Vector3 baseLocalScale = Vector3.one;
     Vector2 anchorOffset = new Vector2(-0.08f, -0.03f);
     float backInset = 0.22f;
+    float depthOffset = 0.08f;
+    float verticalDrop = 0.12f;
+    Transform flagPosition;
+    float exitDropOffset;
     float raiseDuration = 0.7f;
     float raiseTimer;
     float horizontalStartAngle = 90f;
@@ -985,7 +1066,10 @@ sealed class SponsorFlagDisplay : MonoBehaviour
         Vector3 localScale,
         float duration,
         Vector2 normalizedAnchorOffset,
-        float normalizedBackInset)
+        float normalizedBackInset,
+        float flagDepthOffset,
+        float flagVerticalDrop,
+        Transform marker)
     {
         baseLocalScale = new Vector3(
             Mathf.Abs(localScale.x),
@@ -994,6 +1078,10 @@ sealed class SponsorFlagDisplay : MonoBehaviour
         raiseDuration = Mathf.Max(0.05f, duration);
         anchorOffset = normalizedAnchorOffset;
         backInset = Mathf.Clamp(normalizedBackInset, 0f, 0.5f);
+        depthOffset = Mathf.Max(0.01f, flagDepthOffset);
+        verticalDrop = Mathf.Max(0f, flagVerticalDrop);
+        flagPosition = marker;
+        exitDropOffset = 0f;
         raiseTimer = 0f;
 
         float facingSign = transform.parent != null && transform.parent.lossyScale.x < 0f
@@ -1031,12 +1119,16 @@ sealed class SponsorFlagDisplay : MonoBehaviour
 
         if (foundFishRenderer)
         {
-            Vector3 contactPoint = new Vector3(
-                fishBounds.center.x + fishBounds.size.x * anchorOffset.x,
-                fishBounds.max.y + fishBounds.size.y * (anchorOffset.y - backInset),
-                fishBounds.center.z);
-            if (Camera.main != null)
-                contactPoint += Camera.main.transform.forward * 0.06f;
+            // Prefer the prefab-authored FlagPos marker; fallback stays on the
+            // texture top for older prefabs without the marker.
+            Vector3 contactPoint = flagPosition != null
+                ? flagPosition.position
+                : new Vector3(
+                    fishBounds.center.x,
+                    fishBounds.max.y - verticalDrop,
+                    transform.parent.position.z);
+            contactPoint.y -= exitDropOffset;
+            contactPoint.z = transform.parent.position.z + depthOffset;
             transform.position = contactPoint;
         }
 
@@ -1052,6 +1144,17 @@ sealed class SponsorFlagDisplay : MonoBehaviour
         float angle = Mathf.Lerp(horizontalStartAngle, 0f, easedRaise);
         transform.rotation = Quaternion.Euler(0f, 0f, angle);
     }
+
+    public Tween PlayExit(float duration)
+    {
+        return DOTween.To(
+                () => exitDropOffset,
+                value => exitDropOffset = value,
+                0.35f,
+                Mathf.Max(0.05f, duration))
+            .SetEase(Ease.InBack);
+    }
+
 }
 
 /// <summary>
@@ -1060,8 +1163,18 @@ sealed class SponsorFlagDisplay : MonoBehaviour
 /// </summary>
 sealed class FishClickInteraction : MonoBehaviour
 {
+    public enum ClickSpinVariant
+    {
+        Random,
+        ReturnToOriginal
+    }
+
     static readonly List<FishClickInteraction> activeInteractions =
         new List<FishClickInteraction>();
+
+    // Bat/tat rieng OnMouseDown (click truc tiep vao ca) - chi BackgroundFishSpawner
+    // duoc bat khi interactionSource = Mouse, de tranh chuot van doa ca luc dang chay OSC.
+    public static bool MouseInteractionEnabled = true;
 
     BoxCollider2D swimBounds;
     Material bubbleMaterial;
@@ -1076,6 +1189,16 @@ sealed class FishClickInteraction : MonoBehaviour
     Vector2 bubbleSizeRange = new Vector2(0.1f, 0.22f);
     Color bubbleColor = new Color(0.72f, 0.94f, 1f, 0.78f);
     bool isEscaping;
+    Tween clickSpinTween;
+    Quaternion baseLocalRotation;
+    Vector3 baseLocalScale;
+    bool scalePulseOnY;
+    const float clickSpinDuration = 0.5f;
+    const float clickSpinScaleCompression = 3f;
+    const int clickSpinScalePulseLoops = 10;
+    const float clickPostSpinAccelerationDuration = 2f;
+
+    public ClickSpinVariant clickSpinVariant = ClickSpinVariant.Random;
 
     void OnEnable()
     {
@@ -1086,9 +1209,13 @@ sealed class FishClickInteraction : MonoBehaviour
     void OnDestroy()
     {
         activeInteractions.Remove(this);
+        clickSpinTween?.Kill();
     }
 
-    public static bool TryTriggerAtScreenPosition(Camera camera, Vector2 screenPosition)
+    public static bool TryTriggerAtScreenPosition(
+        Camera camera,
+        Vector2 screenPosition,
+        ClickSpinVariant spinVariant = ClickSpinVariant.Random)
     {
         if (camera == null)
             return false;
@@ -1126,8 +1253,35 @@ sealed class FishClickInteraction : MonoBehaviour
         if (bestCandidate == null)
             return false;
 
-        bestCandidate.TriggerFromScreenPosition(camera, screenPosition);
+        bestCandidate.TriggerFromScreenPosition(camera, screenPosition, spinVariant);
         return true;
+    }
+
+    public static bool TryGetRandomActiveFish(
+        out GameObject fish,
+        out int candidateCount)
+    {
+        fish = null;
+        candidateCount = 0;
+
+        for (int i = activeInteractions.Count - 1; i >= 0; i--)
+        {
+            FishClickInteraction interaction = activeInteractions[i];
+            if (interaction == null)
+            {
+                activeInteractions.RemoveAt(i);
+                continue;
+            }
+
+            if (!interaction.isActiveAndEnabled || interaction.isEscaping)
+                continue;
+
+            candidateCount++;
+            if (Random.Range(0, candidateCount) == 0)
+                fish = interaction.gameObject;
+        }
+
+        return fish != null;
     }
 
     bool TryGetScreenRect(Camera camera, out Rect screenRect, out float nearestDepth)
@@ -1175,7 +1329,10 @@ sealed class FishClickInteraction : MonoBehaviour
         return screenRect.width > 0f && screenRect.height > 0f;
     }
 
-    void TriggerFromScreenPosition(Camera camera, Vector2 screenPosition)
+    void TriggerFromScreenPosition(
+        Camera camera,
+        Vector2 screenPosition,
+        ClickSpinVariant spinVariant)
     {
         float depth = Vector3.Dot(
             transform.position - camera.transform.position,
@@ -1184,7 +1341,7 @@ sealed class FishClickInteraction : MonoBehaviour
             screenPosition.x,
             screenPosition.y,
             Mathf.Max(0.01f, depth)));
-        TriggerEscape(clickWorldPosition);
+        TriggerEscape(clickWorldPosition, spinVariant);
     }
 
     public void Configure(
@@ -1199,7 +1356,8 @@ sealed class FishClickInteraction : MonoBehaviour
         float bubbleTrailSizeMultiplier,
         float bubbleTrailSpread,
         Vector2 sizeRange,
-        Color color)
+        Color color,
+        bool useVerticalScalePulse)
     {
         swimBounds = bounds;
         bubbleMaterial = particleMaterial;
@@ -1213,6 +1371,9 @@ sealed class FishClickInteraction : MonoBehaviour
         trailSpread = Mathf.Max(0.01f, bubbleTrailSpread);
         bubbleSizeRange = sizeRange;
         bubbleColor = color;
+        baseLocalRotation = transform.localRotation;
+        baseLocalScale = transform.localScale;
+        scalePulseOnY = useVerticalScalePulse;
         CreateClickCollider();
     }
 
@@ -1241,8 +1402,8 @@ sealed class FishClickInteraction : MonoBehaviour
 
     void OnMouseDown()
     {
-        if (!isEscaping)
-            TriggerEscape(GetPointerWorldPosition());
+        if (MouseInteractionEnabled && !isEscaping)
+            TriggerEscape(GetPointerWorldPosition(), ClickSpinVariant.Random);
     }
 
     Vector3 GetPointerWorldPosition()
@@ -1263,72 +1424,64 @@ sealed class FishClickInteraction : MonoBehaviour
             pointerPosition.x, pointerPosition.y, Mathf.Max(0.01f, depth)));
     }
 
-    // Khong con roi-quy-dao-roi-ghep-lai (tung gay giat vi trai khi resume).
-    // Ca giu nguyen duong boi dang di, chi dao huong+tang toc ngay tren chinh
-    // duong do (DOTweenFishAnim.StartleReverse / IStartleableFishMotion.Startle
-    // deu tu dao huong noi bo, khong dung transform.SetParent/detach nua).
-    void TriggerEscape(Vector3 clickWorldPosition)
+    void TriggerEscape(Vector3 clickWorldPosition, ClickSpinVariant spinVariant)
     {
         if (isEscaping)
             return;
 
         isEscaping = true;
-        Debug.Log($"[FishClick] '{name}' hoang so va quay dau boi nguoc lai.", this);
-
-        DOTweenFishAnim swimAnimation = GetComponent<DOTweenFishAnim>();
-        IStartleableFishMotion bespokeMotion = GetComponent<IStartleableFishMotion>();
-        if (bespokeMotion != null)
-        {
-            // Motion rieng da tu dieu khien transform; khong tao them DOPath
-            // cua DOTweenFishAnim tren cung GameObject.
-            bespokeMotion.Startle();
-        }
-        else if (swimAnimation != null)
-        {
-            if (!swimAnimation.enabled && transform.parent != null)
-            {
-                // Truong hop duy nhat con can tach: 1 ca_con thanh vien dan,
-                // component nay von bi disable tu luc spawn (chi "an theo"
-                // goc dan bang parenting) nen chua co quy dao rieng nao de
-                // dao nguoc ca. Sao chep cau hinh boi tu goc dan, tach ra va
-                // khoi dong nhu 1 con ca doc lap moi (khong co "diem xuat
-                // phat" cu de quay ve).
-                DOTweenFishAnim schoolAnimation = transform.parent.GetComponent<DOTweenFishAnim>();
-                if (schoolAnimation != null)
-                {
-                    swimAnimation.swimBounds = schoolAnimation.swimBounds;
-                    swimAnimation.swimSpeed = schoolAnimation.swimSpeed;
-                    swimAnimation.waypointsPerSegment = schoolAnimation.waypointsPerSegment;
-                    swimAnimation.waveHeight = schoolAnimation.waveHeight;
-                    swimAnimation.useSwimLane = schoolAnimation.useSwimLane;
-                    swimAnimation.swimLaneCenter01 = schoolAnimation.swimLaneCenter01;
-                    swimAnimation.swimLaneHeight01 = schoolAnimation.swimLaneHeight01;
-                    swimAnimation.maxTiltAngle = schoolAnimation.maxTiltAngle;
-                    swimAnimation.lifetime = schoolAnimation.lifetime;
-                }
-
-                transform.SetParent(null, true);
-                float awayX = transform.position.x - clickWorldPosition.x;
-                int awayDirection = Mathf.Abs(awayX) > 0.01f
-                    ? (int)Mathf.Sign(awayX)
-                    : (Random.value < 0.5f ? -1 : 1);
-                swimAnimation.ResumeSwimmingFromCurrentPosition(awayDirection);
-            }
-            else
-            {
-                swimAnimation.StartleReverse(startleSpeedMultiplier, startleAnimationSpeed);
-            }
-        }
-
-        // Cac loai co script chuyen dong rieng (sua, ca_muc, cua, tom, ca_ngua...)
-        // deu duoc tra ve qua cung 1 interface thay vi liet ke tung class cu the,
-        // de moi loai moi them sau nay tu dong duoc "giat minh" dung cach.
+        FishRandomMotion randomMotion = GetComponent<FishRandomMotion>();
+        randomMotion?.StartleFromClick(
+            clickSpinDuration + clickPostSpinAccelerationDuration);
+        PlaySpinVariant(spinVariant);
         CreateBubbleBurst();
         if (bubbleTrailEnabled)
             CreateBubbleTrail();
 
         CancelInvoke(nameof(ClearEscaping));
-        Invoke(nameof(ClearEscaping), trailDuration);
+        Invoke(nameof(ClearEscaping), Mathf.Max(trailDuration, clickSpinDuration));
+    }
+
+    public void PlaySpinVariant(ClickSpinVariant requestedVariant)
+    {
+        if (clickSpinTween != null && clickSpinTween.IsActive())
+            return;
+
+        baseLocalRotation = transform.localRotation;
+        baseLocalScale = transform.localScale;
+        FishRandomMotion randomMotion = GetComponent<FishRandomMotion>();
+        randomMotion?.SetRotationSuppressed(true);
+        Vector3 baseEuler = baseLocalRotation.eulerAngles;
+        Sequence spinSequence = DOTween.Sequence();
+
+        // Scale goc la muc toi da; bien do 3 la nen truc dang pulse xuong 1/3
+        // roi ping-pong tro lai scale goc, khong phong to vuot scale ban dau.
+        Vector3 pulseScale = baseLocalScale;
+        if (scalePulseOnY)
+            pulseScale.y /= clickSpinScaleCompression;
+        else
+            pulseScale.x /= clickSpinScaleCompression;
+
+        spinSequence.Append(
+            transform.DOLocalRotate(
+                baseEuler + new Vector3(0f, 0f, 720f),
+                clickSpinDuration,
+                RotateMode.FastBeyond360)
+                .SetEase(Ease.Linear));
+        spinSequence.Join(
+            transform.DOScale(pulseScale, clickSpinDuration / clickSpinScalePulseLoops)
+                .SetEase(Ease.InOutSine)
+                .SetLoops(clickSpinScalePulseLoops, LoopType.Yoyo));
+
+        spinSequence.OnComplete(() =>
+        {
+            transform.localRotation = baseLocalRotation;
+            transform.localScale = baseLocalScale;
+            randomMotion?.SetRotationSuppressed(false);
+            clickSpinTween = null;
+        });
+
+        clickSpinTween = spinSequence;
     }
 
     void ClearEscaping() => isEscaping = false;
@@ -1477,8 +1630,8 @@ sealed class FishClickInteraction : MonoBehaviour
         return new ParticleSystem.MinMaxCurve(minimum, maximum);
     }
 }
-
-
+// Bespoke movement controllers are intentionally removed from the runtime.
+#if false
 /// <summary>
 /// Sideways scuttle-walk for cua (crab): short hops with pauses, no
 /// direction-facing flip (a crab reads the same broadside-on regardless of
@@ -1512,7 +1665,6 @@ sealed class CrabScuttleAnim : MonoBehaviour, IStartleableFishMotion
         // Lerp truc tiep tren no co the day cua ra ngoai man hinh. Do cao thap
         // hon duoc quyet dinh tu luc tha ca (xem QRFolderScanner.CreateFish),
         // dua tren viewport camera - luon nam trong khung hinh.
-        GetComponent<DOTweenFishAnim>()?.EnsureAmbientTwistScheduled();
         PlayNextHop();
     }
 
@@ -1612,7 +1764,6 @@ sealed class ShrimpFlickAnim : MonoBehaviour, IStartleableFishMotion
         float currentFacing = Mathf.Approximately(scale.x, 0f) ? 1f : Mathf.Sign(scale.x);
         direction = currentFacing;
         ApplyFacingFromDirection();
-        swimAnimation?.EnsureAmbientTwistScheduled();
         ScheduleNextFlick();
     }
 
@@ -1752,7 +1903,6 @@ sealed class SeahorseHoverAnim : MonoBehaviour, IStartleableFishMotion
         float currentFacing = Mathf.Approximately(scale.x, 0f) ? 1f : Mathf.Sign(scale.x);
         direction = currentFacing;
         ApplyFacingFromDirection();
-        swimAnimation?.EnsureAmbientTwistScheduled();
 
         ScheduleHeadTilt();
     }
@@ -1810,13 +1960,8 @@ sealed class SeahorseHoverAnim : MonoBehaviour, IStartleableFishMotion
             float visualFacing = direction * (spriteFacesRight ? 1f : -1f);
             float angle = Mathf.Clamp(pathAngle * Mathf.Sign(visualFacing == 0f ? 1f : visualFacing), -maxTiltAngle, maxTiltAngle);
             float rotSmoothing = 1f - Mathf.Exp(-tiltSmoothSpeed * Time.deltaTime);
-            // currentTiltAngle lam muot rieng, roi moi cong spin (khong lam
-            // muot) vao luc dung Euler - cung ly do nhu DOTweenFishAnim.
-            // UpdateFishTilt: Slerp thang tu transform.rotation cu se lam
-            // currentTiltAngle "hoc nham" ca phan PlaySpin() da xoay o frame truoc.
             currentTiltAngle = Mathf.LerpAngle(currentTiltAngle, angle, rotSmoothing);
-            float spinOffset = swimAnimation != null ? swimAnimation.SpinOffsetAngle : 0f;
-            transform.rotation = Quaternion.Euler(0f, 0f, currentTiltAngle + headTiltOffset + spinOffset);
+            transform.rotation = Quaternion.Euler(0f, 0f, currentTiltAngle + headTiltOffset);
         }
         lastPosition = position;
     }
@@ -1844,7 +1989,6 @@ sealed class SeahorseHoverAnim : MonoBehaviour, IStartleableFishMotion
         direction = -direction;
         ApplyFacingFromDirection();
         startleBoostTimer = startleBoostDuration;
-        swimAnimation?.PlaySpin();
     }
 }
 
@@ -1962,6 +2106,7 @@ sealed class JellyfishDriftAnim : MonoBehaviour, IStartleableFishMotion
         swimAnimation?.PlaySpin();
     }
 }
+#endif
 
 /// <summary>
 /// Two-beat "stroke then glide" envelope for rua (turtle): a turtle's shell

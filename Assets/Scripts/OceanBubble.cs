@@ -1,4 +1,3 @@
-using DG.Tweening;
 using UnityEngine;
 
 /// <summary>
@@ -7,6 +6,13 @@ using UnityEngine;
 ///
 /// ⭐ SCALE: mọi thứ nhân theo localScale GỐC của prefab (chụp lại lúc Awake).
 /// Random size chỉ là HỆ SỐ ±: prefab scale 0.3 với hệ số 1.4 → bong bóng scale 0.42.
+///
+/// ⭐ KHÔNG DÙNG DOTWEEN: tốc độ nổi, pop-in, nở dần theo tuổi, fade-in/fade-out đều là
+/// lerp thủ công tính thẳng trong Tick() dựa trên _age/_popAge — không tạo Tween/Sequence
+/// nào cả. Với maxAlive lớn (nhiều người chơi cùng lúc → nhiều bong bóng), mỗi Tween riêng
+/// là một entry DOTween phải tự duyệt + gọi delegate mỗi frame; bỏ hẳn phần này rẻ hơn nhiều
+/// so với để DOTween quản lý hàng nghìn tween cùng lúc, mà kết quả hình ảnh giống hệt (cùng
+/// công thức easing Quad/Sine như DOTween dùng).
 ///
 /// Các field bên dưới là GHI ĐÈ RIÊNG CHO PREFAB NÀY (đặt trên prefab, không phải
 /// trên system). Mục đích: một OceanBubbleSystem có thể dùng nhiều prefab bong bóng
@@ -77,7 +83,8 @@ public class OceanBubble : MonoBehaviour
     Vector2 _axisXZ;       // trục Y "đâm lên mặt nước" tại đúng điểm sinh — xem ApplyAxisVortex()
     float _spawnY;          // cao độ lúc sinh, để tính đã lên được bao xa (deltaY)
     Vector3 _zigAxis;      // trục zig-zag ngẫu nhiên của riêng hạt này
-    float _speed;          // tốc độ nổi hiện tại — DOTween ramp 0 → terminal
+    float _speed;          // tốc độ nổi hiện tại — lerp thủ công 0 → _terminalSpeed trong Tick()
+    float _terminalSpeed;  // tốc độ nổi tới hạn (đích của lerp _speed) — random theo cỡ lúc Spawn
     float _age, _life;
 
     // ── Trạng thái hình dạng (compose thành localScale mỗi Tick) ─────────────
@@ -91,11 +98,15 @@ public class OceanBubble : MonoBehaviour
 
     // ── Trạng thái màu ───────────────────────────────────────────────────────
     float _alpha, _appliedAlpha = -1f, _smoothness;
+    float _targetAlpha;    // đích fade-in (lúc _popping thì lerp nốt phần fade-out riêng)
     Color _tint;
 
+    // ── Trạng thái vỡ (pop) — lerp thủ công rieng, thay cho DOTween Sequence ──
+    const float PopDuration = 0.16f;
     bool _popping;
-    Tween _speedTween, _growTween, _fadeTween, _popInTween;
-    Sequence _popSeq;
+    float _popAge;
+    float _popStartScale;
+    float _popStartAlpha;
 
     public bool IsPopping => _popping;
     public float SizeMultiplier => _sizeMul;
@@ -127,6 +138,12 @@ public class OceanBubble : MonoBehaviour
         }
     }
 
+    // ── Easing thủ công (cùng công thức DOTween dùng cho Quad/Sine) ──────────
+    static float EaseOutQuad(float t) => t * (2f - t);
+    static float EaseInQuad(float t) => t * t;
+    static float EaseOutSine(float t) => Mathf.Sin(t * Mathf.PI * 0.5f);
+    static float EaseInSine(float t) => 1f - Mathf.Cos(t * Mathf.PI * 0.5f);
+
     // ── Sinh ra ──────────────────────────────────────────────────────────────
 
     /// <param name="sizeMul">Hệ số nhân với localScale gốc của prefab (KHÔNG phải mét).</param>
@@ -157,6 +174,7 @@ public class OceanBubble : MonoBehaviour
         _outwardVel = outwardVel;
         _age = 0f;
         _popping = false;
+        _popAge = 0f;
 
         // ⭐ Trục xoáy nước: 1 đường thẳng đứng "đâm lên mặt nước" đúng tại điểm sinh —
         // xem ApplyAxisVortex() trong Tick().
@@ -169,7 +187,7 @@ public class OceanBubble : MonoBehaviour
         // Terminal velocity ~ (hệ số cỡ)^exponent — to nổi nhanh, li ti lờ đờ.
         // riseSpeedMul cho phép 1 loại hạt (li ti) có vận tốc nổi RIÊNG, tách khỏi riseSpeed dùng
         // chung — vì li ti cỡ đã rất nhỏ, chỉ mỗi riseSizeExponent không đủ để tách biệt hẳn cảm giác.
-        float terminal = sys.riseSpeed * riseSpeedWeight * riseSpeedMul
+        _terminalSpeed = sys.riseSpeed * riseSpeedWeight * riseSpeedMul
                        * Mathf.Pow(_sizeMul / Mathf.Max(sys.referenceMultiplier, 1e-3f), sys.riseSizeExponent)
                        * Random.Range(0.85f, 1.15f);
 
@@ -190,51 +208,34 @@ public class OceanBubble : MonoBehaviour
 
         _tint = Color.Lerp(sys.tintSmall, sys.tintBig, sizeT);
         _smoothness = Random.Range(sys.smoothnessRange.x, sys.smoothnessRange.y);
-        float targetAlpha = Mathf.Clamp01(
+        _targetAlpha = Mathf.Clamp01(
             Mathf.Lerp(sys.alphaRange.x, sys.alphaRange.y, sizeT) * alphaWeight * Random.Range(0.8f, 1.2f));
 
         // Sorting ngẫu nhiên → đám sprite chồng nhau có chiều sâu, không bẹt như decal
         if (_sprite != null && sys.sortingOrderJitter > 0)
             _sprite.sortingOrder = _baseSortingOrder + Random.Range(-sys.sortingOrderJitter, sys.sortingOrderJitter + 1);
 
-        _speed = 0f;
         // ⭐ Bắt đầu TO hơn size cuối (popInOvershoot) rồi CO LẠI, KHÔNG phồng từ 0 lên —
         // phồng từ 0 làm hạt gần như vô hình suốt lúc đang bay ra do outwardVel, chỉ hiện
         // rõ khi đã gần dừng hẳn (nhìn như "đột nhiên xuất hiện tại chỗ" thay vì phọt ra
         // và lặn xuống). Co từ to thì hạt HIỆN RÕ NGAY khi vừa phọt khỏi tâm.
+        // ⭐ CÙNG LÝ như trên: fade alpha từ 0 lên (fadeInTime ~0.18s) trùng GẦN NHƯ CHÍNH
+        // XÁC lúc bọt đang lặn xuống (outwardVel thắng _speed chỉ trong ~0.15-0.2s đầu) →
+        // bọt gần như trong suốt suốt đúng lúc đang lặn, mắt không thấy được cú lặn dù toạ
+        // độ đã di chuyển đúng. Bắt đầu ở mức ĐÃ THẤY RÕ (55% target) rồi mới fade nốt phần
+        // còn lại, thay vì fade từ vô hình. _speed/_spawnScale/_growth/_alpha đều được lerp
+        // thủ công moi frame trong Tick() dua theo _age, khong con tao Tween nao ca.
+        _speed = 0f;
         _spawnScale = sys.popInOvershoot;
         _growth = 1f;
         _popScale = 1f;
-        // ⭐ CÙNG LỖI như spawnScale ở trên: fade alpha từ 0 lên (fadeInTime ~0.18s) trùng
-        // GẦN NHƯ CHÍNH XÁC lúc bọt đang lặn xuống (outwardVel thắng _speed chỉ trong
-        // ~0.15-0.2s đầu) → bọt gần như trong suốt suốt đúng lúc đang lặn, mắt không thấy
-        // được cú lặn dù toạ độ đã di chuyển đúng. Bắt đầu ở mức ĐÃ THẤY RÕ (55% target)
-        // rồi mới fade nốt phần còn lại, thay vì fade từ vô hình.
-        _alpha = targetAlpha * 0.55f;
+        _alpha = _targetAlpha * 0.55f;
         _appliedAlpha = -1f;
 
         _t.position = _column;
         _t.localScale = Vector3.zero;
         gameObject.SetActive(true);
         ApplyColor();
-
-        KillTweens();
-
-        // (1) Ramp tốc độ nổi — quán tính nước
-        _speedTween = DOTween.To(() => _speed, v => _speed = v, terminal, sys.riseAccelTime)
-                             .SetEase(Ease.OutQuad);
-
-        // (2) Pop-in: co lại từ popInOvershoot về 100% — xem giải thích ở trên
-        _popInTween = DOTween.To(() => _spawnScale, v => _spawnScale = v, 1f, sys.popInTime)
-                             .SetEase(Ease.OutQuad);
-
-        // (3) Nở dần khi lên cao (áp suất giảm)
-        _growTween = DOTween.To(() => _growth, v => _growth = v, sys.growthOverLife, _life)
-                            .SetEase(Ease.InQuad);
-
-        // (4) Fade-in alpha
-        _fadeTween = DOTween.To(() => _alpha, v => _alpha = v, targetAlpha, sys.fadeInTime)
-                            .SetEase(Ease.OutSine);
     }
 
     // ── Tick (gọi từ OceanBubbleSystem.Update) ───────────────────────────────
@@ -264,7 +265,35 @@ public class OceanBubble : MonoBehaviour
         // trục nhìn cũng không nhận ra được, bỏ hẳn roll cho đỡ tốn 1 phép tính/hạt.
         _t.rotation = billboard ? billboardRot : Quaternion.identity;
 
-        // ⭐ Scale = scale GỐC prefab × hệ số random × các tween; squash giữ "thể tích"
+        if (_popping)
+        {
+            // ⭐ Vỡ: lerp thủ công popScale/alpha về 0 trong PopDuration, tu giai phong ve
+            // pool khi xong — thay cho DOTween.Sequence + OnComplete truoc day.
+            _popAge += dt;
+            float popT = Mathf.Clamp01(_popAge / PopDuration);
+            _popScale = Mathf.Lerp(_popStartScale, 0.05f, EaseInSine(popT));
+            _alpha = Mathf.Lerp(_popStartAlpha, 0f, EaseInQuad(popT));
+        }
+        else
+        {
+            // Tốc độ nổi: quán tính nước, ramp 0 → _terminalSpeed trong riseAccelTime
+            float speedT = Mathf.Clamp01(_age / Mathf.Max(_sys.riseAccelTime, 0.0001f));
+            _speed = Mathf.Lerp(0f, _terminalSpeed, EaseOutQuad(speedT));
+
+            // Pop-in: co lại từ popInOvershoot về 100% trong popInTime
+            float popInT = Mathf.Clamp01(_age / Mathf.Max(_sys.popInTime, 0.0001f));
+            _spawnScale = Mathf.Lerp(_sys.popInOvershoot, 1f, EaseOutQuad(popInT));
+
+            // Nở dần khi lên cao (áp suất giảm), suốt cả vòng đời
+            float growT = Mathf.Clamp01(_age / Mathf.Max(_life, 0.0001f));
+            _growth = Mathf.Lerp(1f, _sys.growthOverLife, EaseInQuad(growT));
+
+            // Fade-in alpha
+            float fadeT = Mathf.Clamp01(_age / Mathf.Max(_sys.fadeInTime, 0.0001f));
+            _alpha = Mathf.Lerp(_targetAlpha * 0.55f, _targetAlpha, EaseOutSine(fadeT));
+        }
+
+        // ⭐ Scale = scale GỐC prefab × hệ số random × các lerp; squash giữ "thể tích"
         float squash = _popping ? 1f : 1f + Mathf.Sin(_age * _wobbleFreq * 1.7f + _phase) * _deformAmp;
         float s = _sizeMul * _growth * _spawnScale * _popScale;
         float inv = 1f / Mathf.Max(squash, 0.05f);
@@ -274,7 +303,11 @@ public class OceanBubble : MonoBehaviour
 
         if (Mathf.Abs(_alpha - _appliedAlpha) > 0.002f) ApplyColor();
 
-        if (_popping) return;
+        if (_popping)
+        {
+            if (_popAge >= PopDuration) _sys.Release(this);
+            return;
+        }
 
         // ⭐ Bay ra HẲN NGOÀI khung hình camera → thu hồi thẳng về pool, KHÔNG chạy
         // animation vỡ — lúc này không còn ai nhìn thấy nên tốn công co/phồng là vô ích.
@@ -339,21 +372,12 @@ public class OceanBubble : MonoBehaviour
     void Pop()
     {
         _popping = true;
-        _speedTween?.Kill();
-        _growTween?.Kill();
-        _fadeTween?.Kill();
-
-        // ⭐ VỠ = CO LẠI THẲNG, không phồng lên trước nữa (nhất quán với lúc SINH cũng co
-        // từ to về chuẩn thay vì phồng từ 0 — xem Spawn()).
-        const float t = 0.16f;
+        _popAge = 0f;
+        _popStartScale = _popScale;
+        _popStartAlpha = _alpha;
 
         if (_sys.spawnPopShards && _sizeMul >= _sys.shardMinParentMultiplier)
             _sys.EmitShards(_t.position, _sizeMul, _worldDiameter);
-
-        _popSeq = DOTween.Sequence();
-        _popSeq.Append(DOTween.To(() => _popScale, v => _popScale = v, 0.05f, t).SetEase(Ease.InSine));
-        _popSeq.Join(DOTween.To(() => _alpha, v => _alpha = v, 0f, t).SetEase(Ease.InQuad));
-        _popSeq.OnComplete(() => _sys.Release(this));
     }
 
     // ── Màu ──────────────────────────────────────────────────────────────────
@@ -376,29 +400,15 @@ public class OceanBubble : MonoBehaviour
 
     // ── Tiện ích ─────────────────────────────────────────────────────────────
 
-    /// <summary>Huỷ mọi tween đang chạy trên hạt này (bắt buộc trước khi trả về pool).</summary>
-    public void KillTweens()
-    {
-        _speedTween?.Kill(); _speedTween = null;
-        _growTween?.Kill(); _growTween = null;
-        _fadeTween?.Kill(); _fadeTween = null;
-        _popInTween?.Kill(); _popInTween = null;
-        _popSeq?.Kill(); _popSeq = null;
-        DOTween.Kill(this);
-    }
-
     /// <summary>Đưa hạt về trạng thái sạch để nằm chờ trong pool.</summary>
     public void ResetForPool()
     {
-        KillTweens();
         _popping = false;
+        _popAge = 0f;
         _alpha = 0f; _appliedAlpha = -1f;
         _spawnScale = 0f; _popScale = 1f; _growth = 1f;
         _t.localScale = Vector3.zero;
         if (_sprite != null) _sprite.sortingOrder = _baseSortingOrder;
         gameObject.SetActive(false);
     }
-
-    void OnDisable() => KillTweens();
-    void OnDestroy() => KillTweens();
 }
