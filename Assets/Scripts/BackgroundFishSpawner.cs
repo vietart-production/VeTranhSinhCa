@@ -110,6 +110,15 @@ public class BackgroundFishSpawner : MonoBehaviour
     public Vector2 clickBubbleSizeRange = new Vector2(0.1f, 0.22f);
     public Color clickBubbleColor = new Color(0.72f, 0.94f, 1f, 0.78f);
 
+    [Header("Tuong tac qua OSC (khach tham quan dung truoc man hinh)")]
+    [Tooltip("Khach tracking qua OSC cung doa ca nhu click chuot: ca boi ngang qua vi tri khach se giat minh bo chay.")]
+    public bool scareFishWithOsc = true;
+    [Tooltip("Cac nguon vi tri khach. De TRONG = tu dung moi OscPersonTracker dang bat trong scene.")]
+    public OscPersonTracker[] oscTrackers;
+    [Tooltip("Chu ky (giay) kiem tra va cham khach-ca. Khach di chuyen cham nen 10 lan/giay la du, " +
+             "va re hon nhieu so voi kiem tra moi frame cho moi khach x moi con ca.")]
+    [Range(0f, 0.5f)] public float oscScareCheckInterval = 0.1f;
+
     [Header("Chiều sâu")]
     [Tooltip("Khoảng Z của đàn cá. Z nhỏ hơn nằm gần camera hơn trong scene hiện tại.")]
     public Vector2 depthRange = new Vector2(-8f, -2f);
@@ -127,16 +136,35 @@ public class BackgroundFishSpawner : MonoBehaviour
         public string fishId;
     }
 
+    private readonly List<OscPersonTracker.Person> oscPeople = new List<OscPersonTracker.Person>();
+    private float nextOscScareCheckTime;
+
     void Update()
     {
-        if (TryReadPrimaryPointerPress(out Vector2 pressedPosition))
-        {
-            FishClickInteraction.TryTriggerAtScreenPosition(Camera.main, pressedPosition);
-            return;
-        }
+        Camera camera = Camera.main;
 
-        if (TryReadPrimaryPointerHold(out Vector2 heldPosition))
-            FishClickInteraction.TryTriggerAtScreenPosition(Camera.main, heldPosition);
+        // Chuot/cham va OSC chay SONG SONG (khong return som) de vua test bang chuot
+        // vua co khach that dung truoc man hinh.
+        if (TryReadPrimaryPointerPress(out Vector2 pressedPosition))
+            FishClickInteraction.TryTriggerAtScreenPosition(camera, pressedPosition);
+        else if (TryReadPrimaryPointerHold(out Vector2 heldPosition))
+            FishClickInteraction.TryTriggerAtScreenPosition(camera, heldPosition);
+
+        if (scareFishWithOsc)
+            ScareFishAtOscPeople(camera);
+    }
+
+    void ScareFishAtOscPeople(Camera camera)
+    {
+        if (camera == null || Time.time < nextOscScareCheckTime)
+            return;
+        nextOscScareCheckTime = Time.time + oscScareCheckInterval;
+
+        // Khach dung yen = giong giu chuot: ca nao boi vao vung khach thi giat minh.
+        // FishClickInteraction tu bo qua ca dang bo chay (isEscaping) nen khong bi kich lien tuc.
+        OscPersonTracker.CollectPeople(oscTrackers, oscPeople);
+        for (int i = 0; i < oscPeople.Count; i++)
+            FishClickInteraction.TryTriggerAtScreenPosition(camera, oscPeople[i].ScreenPosition);
     }
 
     static bool TryReadPrimaryPointerPress(out Vector2 screenPosition)

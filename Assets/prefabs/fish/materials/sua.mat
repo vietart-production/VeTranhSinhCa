@@ -147,10 +147,10 @@ Material:
     - _TwistTravelDuration: 0.5
     - _TwistTriggerTime: -1000
     - _UVSec: 0
-    - _WaveAmplitude: 0.192
-    - _WaveFrequency: 0.16225266
+    - _WaveAmplitude: 0.12
+    - _WaveFrequency: 0.5
     - _WaveLength: 2
-    - _WavePhase: 495.82736
+    - _WavePhase: 771.842
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 0

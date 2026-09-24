@@ -31,7 +31,8 @@ Transform:
   m_LocalPosition: {x: 0, y: -0.904, z: -6.59}
   m_LocalScale: {x: 2.0988276, y: 1.1381507, z: 0.8076}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 5771598213113195093}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!23 &1975314135693697024
@@ -99,20 +100,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a44c13bfdb311524ca65995e50704d3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DOTweenFishAnim
-  swimBounds: {fileID: 0}
-  spawnDuration: 0.5
-  dropDuration: 1.2
-  swimSpeed: 0.18
-  waypointsPerSegment: 5
-  initialDirectionOverride: 0
-  waveHeight: 0.15
-  useSwimLane: 0
-  swimLaneCenter01: 0.5
-  swimLaneHeight01: 0.2
-  maxTiltAngle: 3
-  tiltSmoothSpeed: 6
-  downwardTiltMultiplier: 1.35
-  minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
   useRadialDeform: 1
@@ -127,16 +114,39 @@ MonoBehaviour:
   finBandWidth: 0.12
   finWaveFrequency: 6
   finWaveAmplitude: 0
-  speedVariation: 0.25
-  speedNoiseFrequency: 0.15
-  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
   twistFlailCycles: 2.5
   twistMaxAngleDegrees: 35
-  twistRestIntervalRange: {x: 2.5, y: 6}
-  lifetime: 15
-  fadeOutDuration: 1
-  sinkBelowBoundsMargin: 3
   waterEntryBubbleCount: 18
-  despawnBubbleCount: 10
+--- !u!1 &8915597566774137286
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5771598213113195093}
+  m_Layer: 0
+  m_Name: FlagPos
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5771598213113195093
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8915597566774137286}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0.001, y: 0.42, z: 5.796186}
+  m_LocalScale: {x: 0.8456388, y: 1.1294286, z: 1.1318598}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6138076570480247631}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

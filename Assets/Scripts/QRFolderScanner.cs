@@ -7,9 +7,6 @@ using DG.Tweening;
 using UnityEngine;
 using ZXing;
 using ZXing.Common;
-#if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
-#endif
 
 public class QRFolderScanner : MonoBehaviour
 {
@@ -61,7 +58,12 @@ public class QRFolderScanner : MonoBehaviour
     [Min(0.1f)] public float fishSizeMultiplier = 2f;
 
     [Header("Default fish")]
-    public string defaultFishFolderPath = "Assets/default_fish";
+    [Tooltip("Tuong doi so voi StreamingAssets (Application.streamingAssetsPath) - " +
+        "KHONG phai duong dan tuong doi Assets/ nhu truoc, vi Assets/default_fish " +
+        "khong ton tai trong ban build (chi la thu muc nguon trong Editor). " +
+        "StreamingAssets duoc Unity dong goi kem theo build, doc duoc bang File I/O " +
+        "y het trong Editor lan build.")]
+    public string defaultFishFolderPath = "default_fish";
     public bool spawnDefaultFishOnStart = true;
     [Tooltip("Tỉ lệ số cá mặc định được spawn (1 = tất cả, 0.5 = giảm nửa). " +
         "Đàn cá con (ca_con) luôn được giữ nguyên, không bị cắt giảm theo tỉ lệ này.")]
@@ -167,17 +169,6 @@ public class QRFolderScanner : MonoBehaviour
             ScanImagesInFolder();
 
         InvokeRepeating(nameof(ImportImagesNow), autoImportIntervalSeconds, autoImportIntervalSeconds);
-    }
-
-    void Update()
-    {
-        if (WasReleaseKeyPressed())
-            ReleaseNextFish();
-
-        if (WasImportKeyPressed())
-        {
-            ImportImagesNow();
-        }
     }
 
     [ContextMenu("Import Images From Source Now")]
@@ -349,7 +340,7 @@ public class QRFolderScanner : MonoBehaviour
     [ContextMenu("Spawn Default Fish Now")]
     public void SpawnDefaultFish()
     {
-        string resolvedFolder = ResolveFolderPath(defaultFishFolderPath);
+        string resolvedFolder = ResolveStreamingAssetsFolder(defaultFishFolderPath);
         if (!Directory.Exists(resolvedFolder))
         {
             Debug.LogWarning("[Default Fish] Không tìm thấy thư mục: " + resolvedFolder);
@@ -1153,29 +1144,20 @@ public class QRFolderScanner : MonoBehaviour
         DOTweenFishAnim animation = fish.GetComponent<DOTweenFishAnim>();
         if (animation == null)
             animation = fish.AddComponent<DOTweenFishAnim>();
+        animation.ConfigureStandardFishMotion(template.qrId);
 
-        animation.swimBounds = swimBounds;
-        animation.lifetime = prepareDrop ? lifetimeSeconds : defaultFishLifetimeSeconds;
-
-        // Hướng gốc của prefab là nguồn chuẩn. Trước đây template QR có thể ghi đè
-        // bằng một giá trị cũ và khiến riêng một số loại cá bơi bằng đuôi.
+        FishRandomMotion randomMotion = fish.GetComponent<FishRandomMotion>();
+        if (randomMotion == null)
+            randomMotion = fish.AddComponent<FishRandomMotion>();
         DOTweenFishAnim prefabAnimation = template.prefab.GetComponent<DOTweenFishAnim>();
-        animation.spriteFacesRight = prefabAnimation != null
-            ? prefabAnimation.spriteFacesRight
-            : template.spriteFacesRight;
-        if (isDefaultFish)
-        {
-            animation.swimSpeed *= Mathf.Lerp(
-                defaultFishDepthSpeedRange.x,
-                defaultFishDepthSpeedRange.y,
-                Mathf.Clamp01(depth01));
-            animation.useSwimLane = true;
-            animation.swimLaneCenter01 = Mathf.InverseLerp(
-                defaultFishViewportArea.yMin,
-                defaultFishViewportArea.yMax,
-                fixedViewportPosition.Value.y);
-            animation.swimLaneHeight01 = defaultFishLaneHeight;
-        }
+        randomMotion.Configure(
+            swimBounds,
+            GetMotionSpecies(template.qrId),
+            1f,
+            GetMotionVerticalRange(template.qrId),
+            prefabAnimation == null ? template.spriteFacesRight : prefabAnimation.spriteFacesRight,
+            !prepareDrop);
+
         if (prepareDrop)
         {
             float waterSurfaceY = swimBounds != null
@@ -1194,78 +1176,38 @@ public class QRFolderScanner : MonoBehaviour
         BackgroundFishSpawner interactionSettings =
             UnityEngine.Object.FindFirstObjectByType<BackgroundFishSpawner>();
         if (interactionSettings != null)
-            interactionSettings.ConfigureClickInteraction(fish);
-
-        // Cua/tom/ca_ngua/sua: cung duong roi nuoc nhu moi loai (dep, giu
-        // nguyen), nhung sau khi "cham day" thi doi han sang script chuyen
-        // dong rieng thay vi tiep tuc boi ngang nhu ca thuong - truoc day
-        // nhanh nay bi thieu hoan toan nen vd ca ngua van tu lat trai/phai
-        // nhu ca binh thuong. Ca_muc KHONG nam trong danh sach nay - no boi
-        // binh thuong (huong ve phia dang boi), chi can khong gian rong.
-        bool usesBespokeMotionAfterLanding =
-            template.qrId == "cua" || template.qrId == "tom" ||
-            template.qrId == "ca_ngua" || template.qrId == "sua";
-        if (usesBespokeMotionAfterLanding)
-        {
-            string bespokeId = template.qrId;
-            GameObject fishRef = fish;
-            DOTweenFishAnim animationRef = animation;
-            BoxCollider2D bespokeBounds = swimBounds;
-            Vector2 crabBottomRange = interactionSettings != null
-                ? interactionSettings.crabBottomHeightRange
-                : new Vector2(0.02f, 0.16f);
-            float crabHalfWidth = interactionSettings != null
-                ? interactionSettings.crabPatrolHalfWidth
-                : 1.8f;
-            float seahorseRadius = interactionSettings != null
-                ? interactionSettings.seahorsePatrolRadius
-                : 1f;
-            float switchDelay = prepareDrop ? dropDurationSeconds + 0.1f : 0.05f;
-
-            DOVirtual.DelayedCall(Mathf.Max(0.05f, switchDelay), () =>
-            {
-                if (fishRef == null)
-                    return;
-                // enabled = false khong huy tween DOPath dang chay do; tween cu
-                // van tiep tuc keo transform di theo doan duong con lai, danh
-                // nhau voi script rieng moi gan vao -> giat cuc/tele. Phai
-                // dung StopSwimmingImmediately() de huy han tween truoc.
-                if (animationRef != null)
-                    animationRef.StopSwimmingImmediately();
-
-                switch (bespokeId)
-                {
-                    case "cua":
-                        CrabScuttleAnim scuttle = fishRef.GetComponent<CrabScuttleAnim>();
-                        if (scuttle == null)
-                            scuttle = fishRef.AddComponent<CrabScuttleAnim>();
-                        scuttle.Configure(bespokeBounds, crabBottomRange, crabHalfWidth);
-                        break;
-                    case "tom":
-                        ShrimpFlickAnim flick = fishRef.GetComponent<ShrimpFlickAnim>();
-                        if (flick == null)
-                            flick = fishRef.AddComponent<ShrimpFlickAnim>();
-                        flick.Configure(bespokeBounds);
-                        break;
-                    case "ca_ngua":
-                        SeahorseHoverAnim hover = fishRef.GetComponent<SeahorseHoverAnim>();
-                        if (hover == null)
-                            hover = fishRef.AddComponent<SeahorseHoverAnim>();
-                        hover.Configure(bespokeBounds, seahorseRadius);
-                        break;
-                    case "sua":
-                        JellyfishDriftAnim drift = fishRef.GetComponent<JellyfishDriftAnim>();
-                        if (drift == null)
-                            drift = fishRef.AddComponent<JellyfishDriftAnim>();
-                        drift.Configure(bespokeBounds);
-                        break;
-                }
-            });
-        }
+            interactionSettings.ConfigureClickInteraction(fish, template.qrId);
 
         Debug.Log($"[QR] Spawn: {spawnPosition}, landing: {landingPosition}, " +
                   $"texture: {texture.width}x{texture.height}");
         return fish;
+    }
+
+    static FishMotionSpecies GetMotionSpecies(string fishId)
+    {
+        switch (fishId)
+        {
+            case "ca_ngua": return FishMotionSpecies.Seahorse;
+            case "sua": return FishMotionSpecies.Jellyfish;
+            case "tom": return FishMotionSpecies.Shrimp;
+            case "cua": return FishMotionSpecies.Crab;
+            case "sao_bien": return FishMotionSpecies.Starfish;
+            default: return FishMotionSpecies.Horizontal;
+        }
+    }
+
+    static float GetMotionVerticalRange(string fishId)
+    {
+        switch (fishId)
+        {
+            case "ca_ngua": return 1.4f;
+            case "sua": return 1.2f;
+            case "tom": return 0.45f;
+            case "cua": return 0.2f;
+            case "sao_bien": return 0.7f;
+            case "ca_muc": return 2.2f;
+            default: return 0.9f;
+        }
     }
 
     public void ReleaseNextFish()
@@ -1571,32 +1513,6 @@ public class QRFolderScanner : MonoBehaviour
         }
     }
 
-    static bool WasReleaseKeyPressed()
-    {
-#if ENABLE_INPUT_SYSTEM
-        if (Keyboard.current != null && Keyboard.current.pKey.wasPressedThisFrame)
-            return true;
-#endif
-#if ENABLE_LEGACY_INPUT_MANAGER
-        return Input.GetKeyDown(KeyCode.P);
-#else
-        return false;
-#endif
-    }
-
-    static bool WasImportKeyPressed()
-    {
-#if ENABLE_INPUT_SYSTEM
-        if (Keyboard.current != null && Keyboard.current.iKey.wasPressedThisFrame)
-            return true;
-#endif
-#if ENABLE_LEGACY_INPUT_MANAGER
-        return Input.GetKeyDown(KeyCode.I);
-#else
-        return false;
-#endif
-    }
-
     FishTemplate FindTemplate(string qrId)
     {
         // Prefab name is the source of truth requested by the QR workflow.
@@ -1695,6 +1611,20 @@ public class QRFolderScanner : MonoBehaviour
 
         string projectRoot = Directory.GetParent(Application.dataPath).FullName;
         return Path.GetFullPath(Path.Combine(projectRoot, path));
+    }
+
+    // Danh rieng cho default_fish: khac ResolveFolderPath (tinh theo thu muc
+    // CHUA .exe, chi dung cho Executive_folder/Scanned_Folder - nhung thu muc
+    // NGOAI project, ban than khong ton tai san san trong ban build). Anh mac
+    // dinh la asset that su cua game nen phai nam trong StreamingAssets - thu
+    // muc duy nhat Unity dam bao dong goi kem file rieng le vao ban build va
+    // doc duoc bang File I/O binh thuong ca trong Editor lan build.
+    static string ResolveStreamingAssetsFolder(string path)
+    {
+        if (Path.IsPathRooted(path))
+            return path;
+
+        return Path.Combine(Application.streamingAssetsPath, path);
     }
 
     // quarterTurns duong = xoay theo 1 chieu, am = xoay nguoc lai; chi ho tro

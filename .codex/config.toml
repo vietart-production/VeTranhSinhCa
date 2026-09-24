@@ -1,0 +1,4 @@
+# >>> Pathrule managed (codex hook activation) >>>
+[features]
+hooks = true
+# <<< Pathrule managed <<<

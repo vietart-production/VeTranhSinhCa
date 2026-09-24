@@ -122,7 +122,7 @@ Material:
     - _EnvironmentReflections: 1
     - _FinBandCenter: 0.18
     - _FinBandWidth: 0.12
-    - _FinWaveAmplitude: 0.0672
+    - _FinWaveAmplitude: 0
     - _FinWaveFrequency: 6
     - _GlossMapScale: 1
     - _Glossiness: 0.5
@@ -139,18 +139,18 @@ Material:
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
     - _Surface: 1
-    - _TailSide: 1
-    - _TailWaveStart: 0.68
+    - _TailSide: 0
+    - _TailWaveStart: 0.86
     - _TwistFlailCycles: 2.5
     - _TwistMaxAngle: 35
     - _TwistSpinDuration: 0.5
     - _TwistTravelDuration: 0.6
     - _TwistTriggerTime: -1000
     - _UVSec: 0
-    - _WaveAmplitude: 0.2775
-    - _WaveFrequency: 4.44751
+    - _WaveAmplitude: 0.24
+    - _WaveFrequency: 1.2
     - _WaveLength: 2.5
-    - _WavePhase: 945.67786
+    - _WavePhase: 814.92676
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 0

@@ -1,16 +1,48 @@
+using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Cầu nối giữa input chạm/chuột của khách tham quan và OceanBubbleSystem: đang giữ
-/// tay/chuột ở đâu trên màn hình thì quy chiếu ra world position (tại interactionDepth)
-/// và gọi OceanBubbleSystem.SetEmitPoint() mỗi frame; thả tay thì gọi SetEmitPoint(null)
-/// để tắt nguồn phát. OceanBubbleSystem tự lo burst lúc chạm/thả (autoBurstOnStartStop).
+/// Cầu nối giữa vị trí khách tham quan và OceanBubbleSystem: MỖI khách (qua OSC) và/hoặc
+/// chuột/chạm (test trong Editor) là 1 nguồn phát riêng theo id. Vị trí màn hình được quy
+/// chiếu ra world (tại interactionDepth) và gọi OceanBubbleSystem.SetEmitPoint(id, point)
+/// mỗi frame; khách rời vùng / thả tay thì nguồn đó tự tắt (kèm release burst).
+///
+/// Đồng thời DỌA CÁ tại vị trí từng khách OSC (giống click chuột vào cá của
+/// BackgroundFishSpawner) — gom 1 chỗ để không phải sửa BackgroundFishSpawner.
+///
+/// oscTrackers để TRỐNG = tự dùng mọi OscPersonTracker trong scene (OscPersonTracker.All),
+/// tránh lỗi quên gán trong Inspector làm bong bóng không bao giờ phát.
 /// </summary>
 public class TouchOceanManager : MonoBehaviour
 {
+    // Thêm giá trị MỚI ở cuối để không làm lệch giá trị đã lưu trong scene
+    public enum InteractionSource { Osc, Mouse, OscAndMouse }
+
+    [Tooltip("Osc = lay vi tri khach tu OscPersonTracker (san xuat thuc te). " +
+             "Mouse = dung chuot/cham de test trong Editor khi chua co nguon OSC. " +
+             "OscAndMouse = ca hai cung luc (vua chay OSC vua test bang chuot).")]
+    public InteractionSource interactionSource = InteractionSource.OscAndMouse;
+
+    [Tooltip("Cac nguon vi tri khach qua OSC. De TRONG = tu dung moi OscPersonTracker dang " +
+             "bat trong scene. Chi gan tay khi muon gioi han rieng vai tracker.")]
+    public OscPersonTracker[] oscTrackers;
+
+    [Tooltip("So khach toi da duoc phat bong bong cung luc (uu tien khach vao vung truoc). " +
+             "Van an toan FPS khi dong nguoi; maxAlive cua OceanBubbleSystem van la tran cuoi.")]
+    [Min(1)] public int maxSimultaneousPeople = 8;
+
+    [Header("Doa ca bang OSC")]
+    [Tooltip("Khach OSC doa ca nhu click chuot: ca boi vao vi tri khach se giat minh bo chay. " +
+             "Chuot/cham da duoc BackgroundFishSpawner xu ly san nen o day chi lo OSC.")]
+    public bool scareFishWithOsc = true;
+    [Tooltip("Chu ky (giay) kiem tra khach-ca. 10 lan/giay la du voi nguoi di bo, re hon nhieu " +
+             "so voi moi frame x moi khach x moi con ca.")]
+    [Range(0f, 0.5f)] public float fishScareCheckInterval = 0.1f;
+
+    [Header("Bong bong")]
     [Tooltip("Hệ thống bong bóng sẽ nhận điểm phát mỗi frame.")]
     public OceanBubbleSystem bubbleSystem;
 
@@ -21,26 +53,86 @@ public class TouchOceanManager : MonoBehaviour
              "màn hình. Nên đặt gần mặt kính/khu vực cá bơi để cảm giác chạm đúng vị trí trong bể.")]
     public float interactionDepth = -5f;
 
+    // id am cho chuot, khong trung voi id khach OSC (luon duong, bat dau tu 1)
+    const int MouseEmitterId = -1;
+
+    readonly List<OscPersonTracker.Person> _people = new List<OscPersonTracker.Person>();
+    readonly HashSet<int> _activeIds = new HashSet<int>();
+    bool _warnedNoTracker;
+    float _nextFishScareTime;
+
     void Update()
     {
-        if (bubbleSystem == null)
-            return;
-
         Camera cam = targetCamera != null ? targetCamera : Camera.main;
         if (cam == null)
             return;
 
-        if (TryReadHeldPointer(out Vector2 screenPosition))
+        bool useOsc = interactionSource != InteractionSource.Mouse;
+        if (useOsc)
         {
-            float distanceFromCamera = interactionDepth - cam.transform.position.z;
-            Vector3 worldPosition = cam.ScreenToWorldPoint(
-                new Vector3(screenPosition.x, screenPosition.y, distanceFromCamera));
-            bubbleSystem.SetEmitPoint(worldPosition);
+            OscPersonTracker.CollectPeople(oscTrackers, _people);
+            WarnIfNoTracker();
+            if (scareFishWithOsc)
+                ScareFishAtPeople(cam);
         }
-        else
+
+        if (bubbleSystem == null)
+            return;
+
+        _activeIds.Clear();
+
+        if (useOsc)
+            EmitFromOsc(cam);
+
+        if (interactionSource != InteractionSource.Osc && TryReadHeldPointer(out Vector2 mousePosition))
         {
-            bubbleSystem.SetEmitPoint(null);
+            bubbleSystem.SetEmitPoint(MouseEmitterId, ScreenToWorld(cam, mousePosition));
+            _activeIds.Add(MouseEmitterId);
         }
+
+        // Khach da roi vung / tha tay -> tat dung nguon cua ho (co release burst)
+        bubbleSystem.StopEmittersExcept(_activeIds);
+    }
+
+    void WarnIfNoTracker()
+    {
+        if (_warnedNoTracker || OscPersonTracker.All.Count > 0) return;
+        _warnedNoTracker = true;
+        Debug.LogWarning("[TouchOceanManager] Dang o che do OSC nhung scene khong co OscPersonTracker " +
+                         "nao dang bat - bong bong/doa ca chi chay bang chuot (neu bat OscAndMouse).", this);
+    }
+
+    void ScareFishAtPeople(Camera cam)
+    {
+        if (Time.time < _nextFishScareTime) return;
+        _nextFishScareTime = Time.time + fishScareCheckInterval;
+
+        // Khach dung yen = giong giu chuot: ca nao boi vao vung khach thi giat minh.
+        // FishClickInteraction tu bo qua ca dang bo chay nen khong bi kich lien tuc.
+        for (int i = 0; i < _people.Count; i++)
+            FishClickInteraction.TryTriggerAtScreenPosition(cam, _people[i].ScreenPosition);
+    }
+
+    void EmitFromOsc(Camera cam)
+    {
+        // Uu tien khach vao truoc (FirstSeenTime nho) khi vuot maxSimultaneousPeople
+        if (_people.Count > maxSimultaneousPeople)
+            _people.Sort((a, b) => a.FirstSeenTime.CompareTo(b.FirstSeenTime));
+
+        int count = Mathf.Min(_people.Count, maxSimultaneousPeople);
+        for (int i = 0; i < count; i++)
+        {
+            var person = _people[i];
+            bubbleSystem.SetEmitPoint(person.Id, ScreenToWorld(cam, person.ScreenPosition));
+            _activeIds.Add(person.Id);
+        }
+    }
+
+    Vector3 ScreenToWorld(Camera cam, Vector2 screenPosition)
+    {
+        float distanceFromCamera = interactionDepth - cam.transform.position.z;
+        return cam.ScreenToWorldPoint(
+            new Vector3(screenPosition.x, screenPosition.y, distanceFromCamera));
     }
 
     static bool TryReadHeldPointer(out Vector2 screenPosition)
@@ -74,6 +166,7 @@ public class TouchOceanManager : MonoBehaviour
 
     void OnDisable()
     {
-        bubbleSystem?.SetEmitPoint(null);
+        if (bubbleSystem != null)
+            bubbleSystem.StopAllEmitters();
     }
 }

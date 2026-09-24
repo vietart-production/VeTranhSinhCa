@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &613833629570758857
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8830763735069741782}
+  m_Layer: 0
+  m_Name: FlagPos
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8830763735069741782
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 613833629570758857}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0.246, y: 0.191, z: 7.32453}
+  m_LocalScale: {x: 1.0686177, y: 1.4272376, z: 1.4303097}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3141663366424634969}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2478481499918475808
 GameObject:
   m_ObjectHideFlags: 0
@@ -31,7 +62,8 @@ Transform:
   m_LocalPosition: {x: 0.483, y: 1.347, z: -6.59}
   m_LocalScale: {x: 1.660884, y: 0.900663, z: 0.6390854}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 8830763735069741782}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!23 &208637008664009937
@@ -99,27 +131,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a44c13bfdb311524ca65995e50704d3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DOTweenFishAnim
-  swimBounds: {fileID: 0}
-  spawnDuration: 0.5
-  dropDuration: 1.2
-  swimSpeed: 0.35
-  waypointsPerSegment: 5
-  initialDirectionOverride: 0
-  waveHeight: 1
-  useSwimLane: 0
-  swimLaneCenter01: 0.5
-  swimLaneHeight01: 0.2
-  maxTiltAngle: 9
-  tiltSmoothSpeed: 2.5
-  downwardTiltMultiplier: 1.35
-  minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
   useRadialDeform: 0
   radialArmCount: 5
   useVerticalBodyAxis: 0
-  waveAmplitude: 0.32
-  waveFrequencyPerSpeed: 0.6
+  waveAmplitude: 0.35
+  waveFrequencyPerSpeed: 1
   waveLength: 1.1
   turnAmplitudeBoost: 0.25
   tailWaveStart: 0.83
@@ -127,16 +145,8 @@ MonoBehaviour:
   finBandWidth: 0.12
   finWaveFrequency: 6
   finWaveAmplitude: 0.0896
-  speedVariation: 0.12
-  speedNoiseFrequency: 0.08
-  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
   twistFlailCycles: 2.5
   twistMaxAngleDegrees: 35
-  twistRestIntervalRange: {x: 2.5, y: 6}
-  lifetime: 15
-  fadeOutDuration: 1
-  sinkBelowBoundsMargin: 3
   waterEntryBubbleCount: 18
-  despawnBubbleCount: 10

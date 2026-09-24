@@ -268,7 +268,7 @@ MonoBehaviour:
   scannedFolderPath: Scanned_Folder
   autoImportIntervalSeconds: 1
   fishSizeMultiplier: 2
-  defaultFishFolderPath: Assets/default_fish
+  defaultFishFolderPath: default_fish
   spawnDefaultFishOnStart: 1
   defaultFishSpawnRatio: 0.5
   defaultFishLifetimeSeconds: 0
@@ -731,6 +731,108 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 873eeeaa056086747b050a57ee27b929, type: 3}
   m_PrefabInstance: {fileID: 1433626705}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &172164104
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 172164108}
+  - component: {fileID: 172164107}
+  - component: {fileID: 172164106}
+  - component: {fileID: 172164105}
+  m_Layer: 0
+  m_Name: OscTouchCanvas
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &172164105
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 172164104}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_IgnoreReversedGraphics: 1
+  m_BlockingObjects: 0
+  m_BlockingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+--- !u!114 &172164106
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 172164104}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_UiScaleMode: 0
+  m_ReferencePixelsPerUnit: 100
+  m_ScaleFactor: 1
+  m_ReferenceResolution: {x: 800, y: 600}
+  m_ScreenMatchMode: 0
+  m_MatchWidthOrHeight: 0
+  m_PhysicalUnit: 3
+  m_FallbackScreenDPI: 96
+  m_DefaultSpriteDPI: 96
+  m_DynamicPixelsPerUnit: 1
+  m_PresetInfoIsWorld: 0
+--- !u!223 &172164107
+Canvas:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 172164104}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_RenderMode: 1
+  m_Camera: {fileID: 330585545}
+  m_PlaneDistance: 1
+  m_PixelPerfect: 0
+  m_ReceivesEvents: 1
+  m_OverrideSorting: 0
+  m_OverridePixelPerfect: 0
+  m_SortingBucketNormalizedSize: 0
+  m_VertexColorAlwaysGammaSpace: 0
+  m_AdditionalShaderChannelsFlag: 0
+  m_UpdateRectTransformForStandalone: 0
+  m_SortingLayerID: 0
+  m_SortingOrder: 0
+  m_TargetDisplay: 0
+--- !u!224 &172164108
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 172164104}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0, y: 0, z: 0}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 553679645}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0, y: 0}
 --- !u!4 &214851951 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8447779837847340671, guid: bf1ddd3b11bed3a42845ddf106d9a083, type: 3}
@@ -771,7 +873,7 @@ MonoBehaviour:
   - {fileID: 6381292499886451189, guid: fa3d917483fa1d14f813b9729e2f0558, type: 3}
   numberOfFishToSpawn: 6
   fishSizeMultiplier: 0.65
-  defaultTextureFolderPath: Assets/default_fish
+  defaultTextureFolderPath: Assets/StreamingAssets/default_fish
   requireDefaultTexture: 1
   fishEmissionIntensity: 0.3
   fishEmissionTint: {r: 1, g: 1, b: 1, a: 1}
@@ -802,10 +904,15 @@ MonoBehaviour:
   sponsorFlagInitialDelay: 6
   sponsorFlagVisibleDurationRange: {x: 10, y: 16}
   sponsorFlagIntervalRange: {x: 18, y: 32}
+  sponsorFlagFishDepthOffset: 0.75
+  sponsorFlagDepthOffset: 0.08
   sponsorFlagWidthRatio: 0.68
   sponsorFlagAnchorOffset: {x: -0.08, y: -0.03}
+  sponsorFlagVerticalDrop: 0.12
   sponsorFlagBackInset: 0.22
   sponsorFlagRaiseDuration: 0.7
+  interactionSource: 0
+  oscTrackers: []
   clickBubbleMaterial: {fileID: 2100000, guid: 1c8af11af671abb4eb6cf9edc631111e, type: 2}
   clickStartleSpeedMultiplier: 3
   clickBubbleTrailDuration: 1.2
@@ -1102,21 +1209,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a44c13bfdb311524ca65995e50704d3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DOTweenFishAnim
-  swimBounds: {fileID: 7179163718562800936}
-  spawnDuration: 0.5
-  dropDuration: 1.2
-  swimSpeed: 3
-  waypointsPerSegment: 4
-  initialDirectionOverride: 0
-  waveHeight: 2
-  useSwimLane: 0
-  swimLaneCenter01: 0.5
-  swimLaneHeight01: 0.2
-  maxTiltAngle: 20
-  tiltSmoothSpeed: 6
-  downwardTiltMultiplier: 1.35
-  minimumDownwardTilt: 5
-  spriteFacesRight: 0
+  spriteFacesRight: 1
   bodyMeshSegments: 12
   useRadialDeform: 0
   radialArmCount: 5
@@ -1130,19 +1223,11 @@ MonoBehaviour:
   finBandWidth: 0.12
   finWaveFrequency: 6
   finWaveAmplitude: 0
-  speedVariation: 0.25
-  speedNoiseFrequency: 0.15
-  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
   twistFlailCycles: 2.5
   twistMaxAngleDegrees: 35
-  twistRestIntervalRange: {x: 2.5, y: 6}
-  lifetime: 60
-  fadeOutDuration: 1
-  sinkBelowBoundsMargin: 3
   waterEntryBubbleCount: 18
-  despawnBubbleCount: 10
 --- !u!50 &220713828
 Rigidbody2D:
   serializedVersion: 5
@@ -1263,7 +1348,7 @@ Camera:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RenderingPath: -1
-  m_TargetTexture: {fileID: 0}
+  m_TargetTexture: {fileID: 8400000, guid: 6e0136466e953894eb34244cc93054e7, type: 2}
   m_TargetDisplay: 0
   m_TargetEye: 3
   m_HDR: 1
@@ -1600,11 +1685,213 @@ MonoBehaviour:
   m_LightCookieSize: {x: 1, y: 1}
   m_LightCookieOffset: {x: 0, y: 0}
   m_SoftShadowQuality: 1
+--- !u!1 &440461175
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 440461179}
+  - component: {fileID: 440461178}
+  - component: {fileID: 440461177}
+  - component: {fileID: 440461176}
+  m_Layer: 0
+  m_Name: SpoutDisplayCanvas
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &440461176
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 440461175}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_IgnoreReversedGraphics: 1
+  m_BlockingObjects: 0
+  m_BlockingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+--- !u!114 &440461177
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 440461175}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_UiScaleMode: 0
+  m_ReferencePixelsPerUnit: 100
+  m_ScaleFactor: 1
+  m_ReferenceResolution: {x: 800, y: 600}
+  m_ScreenMatchMode: 0
+  m_MatchWidthOrHeight: 0
+  m_PhysicalUnit: 3
+  m_FallbackScreenDPI: 96
+  m_DefaultSpriteDPI: 96
+  m_DynamicPixelsPerUnit: 1
+  m_PresetInfoIsWorld: 0
+--- !u!223 &440461178
+Canvas:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 440461175}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_RenderMode: 0
+  m_Camera: {fileID: 0}
+  m_PlaneDistance: 100
+  m_PixelPerfect: 0
+  m_ReceivesEvents: 1
+  m_OverrideSorting: 0
+  m_OverridePixelPerfect: 0
+  m_SortingBucketNormalizedSize: 0
+  m_VertexColorAlwaysGammaSpace: 0
+  m_AdditionalShaderChannelsFlag: 0
+  m_UpdateRectTransformForStandalone: 0
+  m_SortingLayerID: 0
+  m_SortingOrder: 100
+  m_TargetDisplay: 0
+--- !u!224 &440461179
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 440461175}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0, y: 0, z: 0}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 834232751}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0, y: 0}
 --- !u!4 &473082901 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4024541923486603594, guid: 4d8830ab6cb55c54ab56d9c2405d4e96, type: 3}
   m_PrefabInstance: {fileID: 129181109}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &498083438
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 498083441}
+  - component: {fileID: 498083440}
+  - component: {fileID: 498083439}
+  m_Layer: 0
+  m_Name: OscReceiver
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &498083439
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498083438}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0acf2db360f5e2b4db115ff61c7c19ea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  signalTimeout: 0.3
+  spaceRect: {fileID: 553679645}
+  courtOrigin: 0
+  debugMarkerPrefab: {fileID: 779496263018157675, guid: 8e6674e750c8a544098ff3b86942f7c3, type: 3}
+  debugMarkerCamera: {fileID: 330585545}
+  debugMarkerDepth: -1
+  showDebugHud: 1
+--- !u!114 &498083440
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498083438}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84489b546d6bc534abfb5726863e4c15, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  port: 14000
+--- !u!4 &498083441
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 498083438}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &553679644
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 553679645}
+  m_Layer: 0
+  m_Name: MapRect
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &553679645
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 553679644}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 172164108}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1001 &618039302
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1924,6 +2211,78 @@ Transform:
   m_Children: []
   m_Father: {fileID: 330585546}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &834232750
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 834232751}
+  - component: {fileID: 834232753}
+  - component: {fileID: 834232752}
+  m_Layer: 0
+  m_Name: SpoutDisplayImage
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &834232751
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 834232750}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 440461179}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &834232752
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 834232750}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 0
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Texture: {fileID: 8400000, guid: 6e0136466e953894eb34244cc93054e7, type: 2}
+  m_UVRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+--- !u!222 &834232753
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 834232750}
+  m_CullTransparentMesh: 1
 --- !u!4 &841730967
 Transform:
   m_ObjectHideFlags: 0
@@ -1969,6 +2328,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90cc8d726c4702146a5f493660ac5c80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  interactionSource: 0
+  oscTrackers: []
   bubbleSystem: {fileID: 870373033}
   targetCamera: {fileID: 330585545}
   interactionDepth: -5
@@ -2361,20 +2722,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a44c13bfdb311524ca65995e50704d3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DOTweenFishAnim
-  swimBounds: {fileID: 0}
-  spawnDuration: 0.5
-  dropDuration: 1.2
-  swimSpeed: 0.5
-  waypointsPerSegment: 5
-  initialDirectionOverride: 0
-  waveHeight: 2
-  useSwimLane: 0
-  swimLaneCenter01: 0.5
-  swimLaneHeight01: 0.2
-  maxTiltAngle: 20
-  tiltSmoothSpeed: 6
-  downwardTiltMultiplier: 1.35
-  minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
   useRadialDeform: 0
@@ -2389,19 +2736,11 @@ MonoBehaviour:
   finBandWidth: 0.12
   finWaveFrequency: 6
   finWaveAmplitude: 0
-  speedVariation: 0.25
-  speedNoiseFrequency: 0.15
-  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
   twistFlailCycles: 2.5
   twistMaxAngleDegrees: 35
-  twistRestIntervalRange: {x: 2.5, y: 6}
-  lifetime: 15
-  fadeOutDuration: 1
-  sinkBelowBoundsMargin: 3
   waterEntryBubbleCount: 18
-  despawnBubbleCount: 10
 --- !u!33 &1034315462
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -3055,6 +3394,56 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6138076570480247631, guid: ef584f806ab6dee4b85ee33a48c4c806, type: 3}
   m_PrefabInstance: {fileID: 8151103601306731837}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1860278764
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1860278766}
+  - component: {fileID: 1860278765}
+  m_Layer: 0
+  m_Name: SpoutOutput
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1860278765
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1860278764}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45099d624c1e6c14e9514f4e5ea1ed9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _spoutName: VECA_FishTank
+  _keepAlpha: 0
+  _captureMethod: 2
+  _sourceCamera: {fileID: 0}
+  _sourceTexture: {fileID: 8400000, guid: 6e0136466e953894eb34244cc93054e7, type: 2}
+  _resources: {fileID: 11400000, guid: f449ebbe2051c2e4d993eaa773a410de, type: 2}
+--- !u!4 &1860278766
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1860278764}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1869370499
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3160,20 +3549,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a44c13bfdb311524ca65995e50704d3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DOTweenFishAnim
-  swimBounds: {fileID: 0}
-  spawnDuration: 0.5
-  dropDuration: 1.2
-  swimSpeed: 0.5
-  waypointsPerSegment: 5
-  initialDirectionOverride: 0
-  waveHeight: 2
-  useSwimLane: 0
-  swimLaneCenter01: 0.5
-  swimLaneHeight01: 0.2
-  maxTiltAngle: 20
-  tiltSmoothSpeed: 6
-  downwardTiltMultiplier: 1.35
-  minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
   useRadialDeform: 0
@@ -3188,19 +3563,11 @@ MonoBehaviour:
   finBandWidth: 0.12
   finWaveFrequency: 6
   finWaveAmplitude: 0
-  speedVariation: 0.25
-  speedNoiseFrequency: 0.15
-  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
   twistFlailCycles: 2.5
   twistMaxAngleDegrees: 35
-  twistRestIntervalRange: {x: 2.5, y: 6}
-  lifetime: 15
-  fadeOutDuration: 1
-  sinkBelowBoundsMargin: 3
   waterEntryBubbleCount: 18
-  despawnBubbleCount: 10
 --- !u!33 &1916961572
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -3295,20 +3662,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a44c13bfdb311524ca65995e50704d3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DOTweenFishAnim
-  swimBounds: {fileID: 0}
-  spawnDuration: 0.5
-  dropDuration: 1.2
-  swimSpeed: 0.5
-  waypointsPerSegment: 5
-  initialDirectionOverride: 0
-  waveHeight: 2
-  useSwimLane: 0
-  swimLaneCenter01: 0.5
-  swimLaneHeight01: 0.2
-  maxTiltAngle: 20
-  tiltSmoothSpeed: 6
-  downwardTiltMultiplier: 1.35
-  minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
   useRadialDeform: 0
@@ -3323,19 +3676,11 @@ MonoBehaviour:
   finBandWidth: 0.12
   finWaveFrequency: 6
   finWaveAmplitude: 0
-  speedVariation: 0.25
-  speedNoiseFrequency: 0.15
-  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
   twistFlailCycles: 2.5
   twistMaxAngleDegrees: 35
-  twistRestIntervalRange: {x: 2.5, y: 6}
-  lifetime: 15
-  fadeOutDuration: 1
-  sinkBelowBoundsMargin: 3
   waterEntryBubbleCount: 18
-  despawnBubbleCount: 10
 --- !u!33 &1951417512
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -3766,20 +4111,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a44c13bfdb311524ca65995e50704d3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DOTweenFishAnim
-  swimBounds: {fileID: 0}
-  spawnDuration: 0.5
-  dropDuration: 1.2
-  swimSpeed: 0.5
-  waypointsPerSegment: 5
-  initialDirectionOverride: 0
-  waveHeight: 2
-  useSwimLane: 0
-  swimLaneCenter01: 0.5
-  swimLaneHeight01: 0.2
-  maxTiltAngle: 20
-  tiltSmoothSpeed: 6
-  downwardTiltMultiplier: 1.35
-  minimumDownwardTilt: 5
   spriteFacesRight: 1
   bodyMeshSegments: 12
   useRadialDeform: 0
@@ -3794,19 +4125,11 @@ MonoBehaviour:
   finBandWidth: 0.12
   finWaveFrequency: 6
   finWaveAmplitude: 0
-  speedVariation: 0.25
-  speedNoiseFrequency: 0.15
-  enableBodyTwist: 1
   twistTravelDuration: 0.5
   twistSpinDuration: 0.35
   twistFlailCycles: 2.5
   twistMaxAngleDegrees: 35
-  twistRestIntervalRange: {x: 2.5, y: 6}
-  lifetime: 15
-  fadeOutDuration: 1
-  sinkBelowBoundsMargin: 3
   waterEntryBubbleCount: 18
-  despawnBubbleCount: 10
 --- !u!33 &2094816234
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -5427,7 +5750,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.1297164, y: 0.12182522}
+  m_Offset: {x: -0.039194107, y: -0.97910154}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0, y: 0}
@@ -5437,7 +5760,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 30.22778, y: 15.359896}
+  m_Size: {x: 28.648968, y: 8.608701}
   m_EdgeRadius: 0
 --- !u!1 &7241622739797308803
 GameObject:
@@ -5812,3 +6135,7 @@ SceneRoots:
   - {fileID: 1419954476}
   - {fileID: 1993158137}
   - {fileID: 870373034}
+  - {fileID: 172164108}
+  - {fileID: 498083441}
+  - {fileID: 440461179}
+  - {fileID: 1860278766}

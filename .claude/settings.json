@@ -1,0 +1,87 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\Admin\\.pathrule\\bin\\pathrule-hook.cmd"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\Admin\\.pathrule\\bin\\pathrule-hook.cmd"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read|Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\Admin\\.pathrule\\bin\\pathrule-hook.cmd"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Read|Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\Admin\\.pathrule\\bin\\pathrule-hook.cmd"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\Admin\\.pathrule\\bin\\pathrule-hook.cmd"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\Admin\\.pathrule\\bin\\pathrule-hook.cmd"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\Admin\\.pathrule\\bin\\pathrule-hook.cmd"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\Admin\\.pathrule\\bin\\pathrule-hook.cmd"
+          }
+        ]
+      }
+    ]
+  }
+}

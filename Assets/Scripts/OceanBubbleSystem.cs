@@ -22,6 +22,9 @@ using UnityEngine;
 ///  • RẢI DỌC ĐƯỜNG KÉO: hạt rải ngẫu nhiên trên đoạn con trỏ đi trong frame.
 ///  • KÉO NHANH = SỦI MẠNH: rate nội suy theo tốc độ con trỏ.
 ///  • BURST khi bắt đầu giữ và khi thả tay.
+///  • NHIỀU NGUỒN PHÁT CÙNG LÚC: mỗi khách (OSC) / con trỏ là 1 emitter riêng theo id
+///    (SetEmitPoint(id, point)) — có burst, tốc độ kéo, accumulator riêng; dùng chung pool
+///    và trần maxAlive. SetEmitPoint(point) cũ = emitter id 0, giữ tương thích.
 ///  • DIVE FIZZ: RIÊNG 1 lớp bong bóng LI TI (cùng cơ chế phọt-xuống-từ-tâm ở trên
 ///    nhưng cỡ nhỏ hơn nhiều, bán kính rải rộng hơn để không bị đám bong bóng to che
 ///    khuất) — phọt 1 đợt lúc vừa chạm (spawnDiveFizzOnPress) RỒI sinh thêm liên tục
@@ -147,6 +150,11 @@ public class OceanBubbleSystem : MonoBehaviour
     [Tooltip("Tự động Burst khi bắt đầu/kết thúc phát, để TouchOceanManager chỉ cần gọi SetEmitPoint().\n\n" +
              "Tắt nếu bạn muốn tự kiểm soát thời điểm burst bằng cách gọi Burst() từ script khác.")]
     public bool autoBurstOnStartStop = true;
+
+    [Tooltip("⭐ NHIỀU KHÁCH CÙNG LÚC: chia tốc độ phát (idleRate/dragRate/diveFizzRatePerSecond) " +
+             "cho số nguồn đang phát để tổng lượng bong bóng không nhân lên theo số khách.\n\n" +
+             "Tắt = mỗi khách sủi đủ mạnh như khi chỉ có 1 người (maxAlive vẫn là trần an toàn).")]
+    public bool shareRateBetweenEmitters = false;
 
     // ═══════════════════════════════════════════════════════════════════════
     [Header("⭐ LI TI PHỌT XUỐNG LÚC CHẠM (dive fizz)")]
@@ -377,14 +385,24 @@ public class OceanBubbleSystem : MonoBehaviour
     readonly Stack<OceanBubble> _pool = new Stack<OceanBubble>();
     readonly List<OceanBubble> _alive = new List<OceanBubble>(256);
 
+    /// <summary>Trạng thái riêng của 1 nguồn phát (1 khách / 1 con trỏ).</summary>
+    sealed class Emitter
+    {
+        public int id;
+        public Vector3 point, prevPoint;
+        public float accumulator;
+        public float diveFizzAccumulator;
+    }
+
+    readonly List<Emitter> _emitters = new List<Emitter>(8);
+    readonly Stack<Emitter> _emitterPool = new Stack<Emitter>();
+    readonly List<int> _stopBuffer = new List<int>(8);
+
     Transform _poolRoot;
-    bool _emitting;
-    Vector3 _emitPoint, _prevEmitPoint;
-    float _accumulator;
-    float _diveFizzAccumulator;
 
     public int AliveCount => _alive.Count;
-    public bool IsEmitting => _emitting;
+    public bool IsEmitting => _emitters.Count > 0;
+    public int EmitterCount => _emitters.Count;
 
     void Awake()
     {
@@ -407,31 +425,73 @@ public class OceanBubbleSystem : MonoBehaviour
 
     // ── API cho TouchOceanManager ────────────────────────────────────────────
 
-    /// <summary>Gọi mỗi frame khi đang giữ (truyền hold point), gọi null khi thả tay.</summary>
-    public void SetEmitPoint(Vector3? point)
+    /// <summary>Gọi mỗi frame khi đang giữ (truyền hold point), gọi null khi thả tay. = emitter id 0.</summary>
+    public void SetEmitPoint(Vector3? point) => SetEmitPoint(0, point);
+
+    /// <summary>
+    /// Nguồn phát theo id (mỗi khách OSC / con trỏ 1 id riêng). Gọi mỗi frame khi nguồn còn
+    /// hoạt động, gọi null khi nguồn biến mất (khách rời vùng / thả tay) để có release burst.
+    /// </summary>
+    public void SetEmitPoint(int emitterId, Vector3? point)
     {
+        int index = FindEmitter(emitterId);
+
         if (point.HasValue)
         {
-            if (!_emitting)
+            if (index < 0)
             {
-                _emitting = true;
-                _emitPoint = _prevEmitPoint = point.Value;
-                _accumulator = 0f;
-                _diveFizzAccumulator = 0f;
+                var e = _emitterPool.Count > 0 ? _emitterPool.Pop() : new Emitter();
+                e.id = emitterId;
+                e.point = e.prevPoint = point.Value;
+                e.accumulator = 0f;
+                e.diveFizzAccumulator = 0f;
+                _emitters.Add(e);
                 if (autoBurstOnStartStop) Burst(point.Value, pressBurst, 1f, 1.25f);
                 if (spawnDiveFizzOnPress) SpawnDiveFizz(point.Value, diveFizzCount);
             }
             else
             {
-                _prevEmitPoint = _emitPoint;
-                _emitPoint = point.Value;
+                var e = _emitters[index];
+                e.prevPoint = e.point;
+                e.point = point.Value;
             }
         }
-        else if (_emitting)
+        else if (index >= 0)
         {
-            _emitting = false;
-            if (autoBurstOnStartStop) Burst(_emitPoint, releaseBurst, 0.7f, 0.85f);
+            var e = _emitters[index];
+            _emitters.RemoveAt(index);
+            _emitterPool.Push(e);
+            if (autoBurstOnStartStop) Burst(e.point, releaseBurst, 0.7f, 0.85f);
         }
+    }
+
+    /// <summary>Có đang có nguồn phát với id này không.</summary>
+    public bool HasEmitter(int emitterId) => FindEmitter(emitterId) >= 0;
+
+    /// <summary>
+    /// Tắt (kèm release burst) mọi nguồn phát KHÔNG có trong <paramref name="keepIds"/>.
+    /// Tiện cho script điều khiển nhiều khách: mỗi frame SetEmitPoint cho khách còn, rồi gọi
+    /// hàm này để dọn khách đã rời đi.
+    /// </summary>
+    public void StopEmittersExcept(HashSet<int> keepIds)
+    {
+        _stopBuffer.Clear();
+        foreach (var e in _emitters)
+            if (keepIds == null || !keepIds.Contains(e.id)) _stopBuffer.Add(e.id);
+        foreach (int id in _stopBuffer) SetEmitPoint(id, null);
+    }
+
+    /// <summary>Tắt mọi nguồn phát (kèm release burst nếu autoBurstOnStartStop).</summary>
+    public void StopAllEmitters() => StopEmittersExcept(null);
+
+    float EmitterRateScale =>
+        shareRateBetweenEmitters && _emitters.Count > 1 ? 1f / _emitters.Count : 1f;
+
+    int FindEmitter(int emitterId)
+    {
+        for (int i = 0; i < _emitters.Count; i++)
+            if (_emitters[i].id == emitterId) return i;
+        return -1;
     }
 
     /// <summary>Phụt một nhúm bong bóng tức thì tại một điểm.</summary>
@@ -456,42 +516,9 @@ public class OceanBubbleSystem : MonoBehaviour
         float dt = Time.deltaTime;
         float time = Time.time;
 
-        if (_emitting && bubblePrefab != null)
-        {
-            // Kéo càng nhanh → sủi càng nhiều (khuấy nước mạnh hơn)
-            float dragSpeed = dt > 0f ? Vector3.Distance(_emitPoint, _prevEmitPoint) / dt : 0f;
-            float k = Mathf.Clamp01(dragSpeed / Mathf.Max(dragSpeedForMaxRate, 0.01f));
-            float rate = Mathf.Lerp(idleRate, dragRate, k);
-
-            _accumulator += rate * dt;
-            int n = Mathf.FloorToInt(_accumulator);
-            _accumulator -= n;
-            n = Mathf.Min(n, 60);   // trần mỗi frame, phòng khi dt nhảy cóc
-
-            for (int i = 0; i < n; i++)
-            {
-                // Rải đều dọc đoạn con trỏ đi trong frame này → vệt liền mạch
-                Vector3 c = Vector3.Lerp(_prevEmitPoint, _emitPoint, Random.value);
-                SpawnOne(c, 1f, Mathf.Lerp(1f, 1.6f, k));
-            }
-
-            // Li ti LIÊN TỤC trong lúc giữ/kéo (không chỉ đợt phọt mở màn lúc press)
-            if (diveFizzContinuous && diveFizzRatePerSecond > 0f)
-            {
-                _diveFizzAccumulator += diveFizzRatePerSecond * dt;
-                int nf = Mathf.FloorToInt(_diveFizzAccumulator);
-                _diveFizzAccumulator -= nf;
-                nf = Mathf.Min(nf, 60);   // trần mỗi frame, phòng khi dt nhảy cóc
-
-                for (int i = 0; i < nf; i++)
-                {
-                    Vector3 c = Vector3.Lerp(_prevEmitPoint, _emitPoint, Random.value);
-                    SpawnOneDiveFizz(c);
-                }
-            }
-
-            _prevEmitPoint = _emitPoint;
-        }
+        if (bubblePrefab != null)
+            for (int ei = 0; ei < _emitters.Count; ei++)
+                TickEmitter(_emitters[ei], dt);
 
         // Billboard: tính 1 lần cho cả đám
         if (billboard && billboardCamera == null) billboardCamera = Camera.main;
@@ -505,6 +532,43 @@ public class OceanBubbleSystem : MonoBehaviour
             if (b == null) { _alive.RemoveAt(i); continue; }
             b.Tick(dt, time, billboardRot, doBillboard);
         }
+    }
+
+    void TickEmitter(Emitter e, float dt)
+    {
+        // Kéo càng nhanh → sủi càng nhiều (khuấy nước mạnh hơn)
+        float dragSpeed = dt > 0f ? Vector3.Distance(e.point, e.prevPoint) / dt : 0f;
+        float k = Mathf.Clamp01(dragSpeed / Mathf.Max(dragSpeedForMaxRate, 0.01f));
+        float rate = Mathf.Lerp(idleRate, dragRate, k) * EmitterRateScale;
+
+        e.accumulator += rate * dt;
+        int n = Mathf.FloorToInt(e.accumulator);
+        e.accumulator -= n;
+        n = Mathf.Min(n, 60);   // trần mỗi frame, phòng khi dt nhảy cóc
+
+        for (int i = 0; i < n; i++)
+        {
+            // Rải đều dọc đoạn con trỏ đi trong frame này → vệt liền mạch
+            Vector3 c = Vector3.Lerp(e.prevPoint, e.point, Random.value);
+            SpawnOne(c, 1f, Mathf.Lerp(1f, 1.6f, k));
+        }
+
+        // Li ti LIÊN TỤC trong lúc giữ/kéo (không chỉ đợt phọt mở màn lúc press)
+        if (diveFizzContinuous && diveFizzRatePerSecond > 0f)
+        {
+            e.diveFizzAccumulator += diveFizzRatePerSecond * EmitterRateScale * dt;
+            int nf = Mathf.FloorToInt(e.diveFizzAccumulator);
+            e.diveFizzAccumulator -= nf;
+            nf = Mathf.Min(nf, 60);   // trần mỗi frame, phòng khi dt nhảy cóc
+
+            for (int i = 0; i < nf; i++)
+            {
+                Vector3 c = Vector3.Lerp(e.prevPoint, e.point, Random.value);
+                SpawnOneDiveFizz(c);
+            }
+        }
+
+        e.prevPoint = e.point;
     }
 
     // ── Sinh hạt ─────────────────────────────────────────────────────────────
@@ -648,7 +712,8 @@ public class OceanBubbleSystem : MonoBehaviour
 
     void OnDisable()
     {
-        _emitting = false;
+        foreach (var e in _emitters) _emitterPool.Push(e);
+        _emitters.Clear();
         for (int i = _alive.Count - 1; i >= 0; i--)
             if (_alive[i] != null) _alive[i].KillTweens();
     }
@@ -656,7 +721,16 @@ public class OceanBubbleSystem : MonoBehaviour
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()
     {
-        Vector3 c = (Application.isPlaying && _emitting) ? _emitPoint : transform.position;
+        if (Application.isPlaying && _emitters.Count > 0)
+        {
+            foreach (var e in _emitters) DrawClusterGizmo(e.point);
+            return;
+        }
+        DrawClusterGizmo(transform.position);
+    }
+
+    void DrawClusterGizmo(Vector3 c)
+    {
         Gizmos.color = new Color(0.4f, 0.9f, 1f, 0.35f);
         Gizmos.DrawWireSphere(c, clusterRadius);                 // bán kính đám
         Gizmos.color = new Color(0.4f, 0.9f, 1f, 0.8f);

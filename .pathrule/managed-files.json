@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "path": ".claude/settings.json",
+      "owner": "cli",
+      "owner_version": "0.4.0",
+      "updated_at": "2026-09-20T13:34:22.424Z"
+    },
+    {
+      "path": ".codex/config.toml",
+      "owner": "cli",
+      "owner_version": "0.4.0",
+      "updated_at": "2026-09-20T13:34:24.097Z"
+    },
+    {
+      "path": ".codex/hooks.json",
+      "owner": "cli",
+      "owner_version": "0.4.0",
+      "updated_at": "2026-09-20T13:34:24.097Z"
+    },
+    {
+      "path": "AGENTS.md",
+      "owner": "cli",
+      "owner_version": "0.4.0",
+      "updated_at": "2026-09-20T13:34:24.097Z"
+    }
+  ]
+}

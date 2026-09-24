@@ -91,7 +91,10 @@ Shader "Custom/FishBody"
         // chung cho nhieu loai, khong the biet truoc huong texture.
         float3 ApplyTailWave(float3 positionOS, float bodyPos01)
         {
-            float tailWeight = smoothstep(_TailWaveStart, 1.0, bodyPos01);
+            // Mo rong vung noi tu than vao duoi de bien dang lan dan, tranh tao
+            // mot khop gap tai dung nguong bat dau wave.
+            float transitionStart = max(0.0, _TailWaveStart - 0.14);
+            float tailWeight = smoothstep(transitionStart, 1.0, bodyPos01);
             float wave = sin(_Time.y * _WaveFrequency + bodyPos01 * _WaveLength + _WavePhase) * _WaveAmplitude * tailWeight;
 
             // Vay nguc: 1 vung nho gan dau dao dong nhe, doc lap voi vay duoi,
