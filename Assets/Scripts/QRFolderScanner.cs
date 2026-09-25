@@ -7,23 +7,26 @@ using DG.Tweening;
 using UnityEngine;
 using ZXing;
 using ZXing.Common;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 public class QRFolderScanner : MonoBehaviour
 {
-    private static readonly Dictionary<string, byte[]> FilledAlphaCache =
-        new Dictionary<string, byte[]>();
-
     [Serializable]
     public class FishTemplate
     {
         public string qrId;
         public GameObject prefab;
+
+        // alphaTemplate/scanCrop KHONG con duoc dung de tao texture (xem BuildFishTexture) -
+        // pipeline moi tu do 2 duong ke ngang tren trang va xoa nen trang thay vi ep theo
+        // khung/mask rieng cho tung loai. Giu lai field de khong vo du lieu da luu trong scene.
         public Texture2D alphaTemplate;
 
         [Tooltip("Bật nếu model ở scale X dương quay đầu sang phải.")]
         public bool spriteFacesRight = true;
 
-        [Tooltip("Vùng cá trong ảnh scan, tọa độ chuẩn hóa từ góc trên-trái.")]
         public Rect scanCrop = new Rect(0.18f, 0.12f, 0.62f, 0.76f);
 
         [Tooltip("Xoay texture sau khi tạo (0/90/180/270 độ), dùng khi tranh in " +
@@ -112,15 +115,26 @@ public class QRFolderScanner : MonoBehaviour
     public List<FishTemplate> fishTemplates = new List<FishTemplate>();
     [Min(256)] public int outputWidth = 2048;
 
-    [Header("Scan alignment")]
-    [Tooltip("Tự đo viền cá trên ảnh scan và căn khớp với alpha template trước khi tạo texture.")]
-    public bool autoAlignScannedArtwork = true;
-    [Range(40, 180)] public int artworkDarkPixelThreshold = 105;
-    [Range(256, 1024)] public int alignmentSampleResolution = 768;
-    [Tooltip("Nới rộng vùng tìm mực đậm quanh Scan Crop khai báo (tỉ lệ theo kích " +
-             "thước Scan Crop), để loại QR/tiêu đề/logo tài trợ khỏi vùng tìm mà " +
-             "vẫn chịu được sai lệch khi đặt giấy lên máy scan.")]
-    [Range(0f, 1f)] public float autoAlignSearchPadding = 0.35f;
+    [Header("Cắt theo đường kẻ ngang")]
+    [Tooltip("Ảnh scan có 2 đường kẻ đen ngang trang (dưới header QR/tiêu đề, và trên footer " +
+             "logo tài trợ) - tranh của khách nằm giữa 2 đường đó. Tự dò 2 đường này theo pixel " +
+             "thay vì dùng toạ độ scanCrop cố định, miễn ảnh chụp luôn cùng size/canh lề.")]
+    [Range(40, 200)] public int dividerLineDarkThreshold = 120;
+    [Tooltip("Tỉ lệ tối thiểu số pixel tối liên tục theo chiều ngang (bỏ qua viền 2 bên) để " +
+             "coi 1 hàng là đường kẻ ngang.")]
+    [Range(0.5f, 1f)] public float dividerLineMinCoverage = 0.85f;
+
+    [Header("Xoá nền trắng")]
+    [Tooltip("Dưới ngưỡng này (độ sáng 0-255): luôn giữ lại (nét đen/vùng tối). " +
+             "Đo thực tế trên ảnh mẫu: nền giấy KHÔNG sáng gần 255 mà dao động quanh 190-220 " +
+             "tuỳ ánh sáng lúc chụp, nên ngưỡng phải thấp hơn trực giác.")]
+    [Range(0, 255)] public int backgroundLuminanceStart = 150;
+    [Tooltip("Trên ngưỡng này (độ sáng) VÀ bão hoà màu thấp: coi là nền, xoá trong suốt.")]
+    [Range(0, 255)] public int backgroundLuminanceFull = 175;
+    [Tooltip("Dưới ngưỡng bão hoà màu này: có thể là nền (xám/trắng).")]
+    [Range(0, 100)] public int backgroundSaturationKeep = 20;
+    [Tooltip("Trên ngưỡng bão hoà màu này: chắc chắn là màu tô (kể cả màu sáng như vàng), luôn giữ lại.")]
+    [Range(0, 100)] public int backgroundSaturationFull = 34;
 
     [Header("Performance")]
     [Tooltip("Ngân sách xử lý pixel tối đa mỗi frame khi nhấn I.")]
@@ -140,6 +154,9 @@ public class QRFolderScanner : MonoBehaviour
     [Range(0f, 25f)] public float dropImpactTilt = 9f;
 
     private readonly Queue<GameObject> pendingFish = new Queue<GameObject>();
+    // Ca do nguoi choi quet QR tao ra (dang cho hoac da tha boi), KHONG bao gom ca mac
+    // dinh/background - dung cho phim R (RemovePlayerFish) de don rieng loai nay.
+    private readonly List<GameObject> playerFish = new List<GameObject>();
     private readonly HashSet<string> failedExecutionFiles =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> importedSourceSignatures =
@@ -273,8 +290,7 @@ public class QRFolderScanner : MonoBehaviour
             ? null
             : FindTemplate(qrId.Trim());
 
-        if (string.IsNullOrWhiteSpace(qrId) || template == null ||
-            template.prefab == null || template.alphaTemplate == null)
+        if (string.IsNullOrWhiteSpace(qrId) || template == null || template.prefab == null)
         {
             MarkIncrementalFailure(file, "Không đọc được QR hoặc chưa cấu hình template.");
             Destroy(scanTexture);
@@ -448,8 +464,7 @@ public class QRFolderScanner : MonoBehaviour
                 throw new InvalidOperationException(
                     "Không đọc được QR và tên file không chứa mã loại cá.");
 
-            if (template == null || template.prefab == null ||
-                (!useReadyTexture && template.alphaTemplate == null))
+            if (template == null || template.prefab == null)
                 throw new InvalidOperationException("Chưa cấu hình template cho QR: " + qrId);
 
             Debug.Log($"[QR] Payload '{qrId.Trim()}' -> prefab '{template.prefab.name}'");
@@ -466,6 +481,9 @@ public class QRFolderScanner : MonoBehaviour
             else
             {
                 outputTexture = BuildFishTexture(scanTexture, template);
+                if (outputTexture == null)
+                    throw new InvalidOperationException(
+                        "Không tìm thấy đường kẻ ngang hoặc nét vẽ trong ảnh scan.");
             }
 
             outputTexture.name = "PlayerFish_" + qrId + "_" + Path.GetFileNameWithoutExtension(file);
@@ -580,75 +598,173 @@ public class QRFolderScanner : MonoBehaviour
         return result != null ? result.Text : null;
     }
 
-    Texture2D BuildFishTexture(Texture2D scan, FishTemplate template)
+    // ── Dò 2 đường kẻ ngang + xoá nền trắng (thay cho khung/alpha-template) ────
+
+    /// <summary>
+    /// Dò 2 đường kẻ đen ngang trang (dưới header, trên footer) bằng cách tìm hàng pixel có
+    /// tỉ lệ tối liên tục theo chiều ngang vượt <see cref="dividerLineMinCoverage"/>. Toạ độ
+    /// trả về là "top-down" (0 = hàng trên cùng khi NGƯỜI xem ảnh), khác quy ước texture Unity
+    /// (Y=0 ở dưới) - quy đổi khi đọc pixel thực tế.
+    /// </summary>
+    bool TryFindHorizontalDividerLines(
+        Color32[] pixels, int width, int height, out int topLineYTop, out int bottomLineYTop)
     {
-        Rect scanCrop = template.scanCrop;
-        if (scanCrop.width <= 0f || scanCrop.height <= 0f)
+        int marginX = Mathf.RoundToInt(width * 0.03f);
+        int sampleWidth = Mathf.Max(1, width - marginX * 2);
+        int minDarkCount = Mathf.RoundToInt(sampleWidth * dividerLineMinCoverage);
+        int threshold = dividerLineDarkThreshold;
+
+        bool RowIsDivider(int yTop)
         {
-            // Calibration mặc định cho ảnh Comet Scanner 240 DPI của mẫu ca_heo.
-            scanCrop = new Rect(0.01f, 0.095f, 0.98f, 0.8f);
-            Debug.LogWarning($"[QR] Scan Crop của '{template.qrId}' chưa hợp lệ; " +
-                             "đang dùng calibration mặc định.");
+            int yBottom = height - 1 - yTop;
+            int row = yBottom * width;
+            int darkCount = 0;
+            for (int x = marginX; x < width - marginX; x++)
+            {
+                Color32 c = pixels[row + x];
+                int luminance = (299 * c.r + 587 * c.g + 114 * c.b) / 1000;
+                if (luminance < threshold) darkCount++;
+            }
+            return darkCount >= minDarkCount;
         }
 
-        int outputHeight = Mathf.Max(1,
-            Mathf.RoundToInt(outputWidth * (template.alphaTemplate.height /
-                                             (float)template.alphaTemplate.width)));
-        Texture2D mask = CreateReadableCopy(template.alphaTemplate, outputWidth, outputHeight);
+        topLineYTop = -1;
+        for (int yTop = 0; yTop < height; yTop++)
+            if (RowIsDivider(yTop)) { topLineYTop = yTop; break; }
+
+        bottomLineYTop = -1;
+        for (int yTop = height - 1; yTop >= 0; yTop--)
+            if (RowIsDivider(yTop)) { bottomLineYTop = yTop; break; }
+
+        return topLineYTop >= 0 && bottomLineYTop >= 0 && bottomLineYTop > topLineYTop;
+    }
+
+    /// <summary>
+    /// Alpha cho 1 pixel scan: 255 nếu chắc chắn là nét vẽ/màu tô, 0 nếu chắc chắn là nền
+    /// trắng/xám của giấy, nội suy mềm ở vùng biên để tránh viền răng cưa cứng. Hiệu chỉnh
+    /// bằng số liệu đo thực tế trên ảnh mẫu: nền giấy dao động quanh luminance ~190-220
+    /// (KHÔNG sáng gần 255 do ánh sáng lúc chụp) với bão hoà màu thấp (~10-20); nét/màu tô
+    /// hoặc tối (luminance thấp, kể cả nét đen) hoặc bão hoà màu cao (kể cả khi sáng, ví dụ
+    /// màu vàng) - phải thoả CẢ HAI điều kiện "đủ sáng" và "đủ nhạt màu" mới bị coi là nền.
+    /// </summary>
+    byte ComputeArtworkAlpha(Color32 c)
+    {
+        int luminance = (299 * c.r + 587 * c.g + 114 * c.b) / 1000;
+        int max = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+        int min = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
+        int saturation = max - min;
+
+        float lumT = Mathf.InverseLerp(backgroundLuminanceStart, backgroundLuminanceFull, luminance);
+        float satT = Mathf.InverseLerp(backgroundSaturationFull, backgroundSaturationKeep, saturation);
+        float backgroundScore = Mathf.Min(lumT, satT);
+        return (byte)Mathf.Clamp(Mathf.RoundToInt((1f - backgroundScore) * 255f), 0, 255);
+    }
+
+    Texture2D BuildFishTexture(Texture2D scan, FishTemplate template)
+    {
+        Color32[] scanPixels = scan.GetPixels32();
+        int scanWidth = scan.width;
+        int scanHeight = scan.height;
+
+        if (!TryFindHorizontalDividerLines(scanPixels, scanWidth, scanHeight,
+                out int topLineYTop, out int bottomLineYTop))
+        {
+            Debug.LogWarning($"[FishTexture] Không tìm thấy 2 đường kẻ ngang cho " +
+                              $"'{template.qrId}'; dùng toàn bộ ảnh.");
+            topLineYTop = 0;
+            bottomLineYTop = scanHeight - 1;
+        }
+
+        // Bỏ qua chính 2 đường kẻ + 1 khoảng đệm nhỏ, và biên trái/phải để tránh dính mép trang.
+        int inset = Mathf.RoundToInt(scanHeight * 0.006f) + 4;
+        int cropTopY = Mathf.Clamp(topLineYTop + inset, 0, scanHeight - 1);
+        int cropBottomY = Mathf.Clamp(bottomLineYTop - inset, 0, scanHeight - 1);
+        if (cropBottomY <= cropTopY) { cropTopY = 0; cropBottomY = scanHeight - 1; }
+
+        int marginX = Mathf.RoundToInt(scanWidth * 0.02f);
+        int cropLeftX = marginX;
+        int cropWidth = Mathf.Max(1, scanWidth - marginX * 2);
+        int cropHeight = cropBottomY - cropTopY + 1;
+
+        // Buoc 1: tinh alpha ca vung crop, tim luon bounding box noi dung KHONG trong suot -
+        // "lay tam lam ca": trim sat vao net ve thay vi giu nguyen ca vung giua 2 duong ke.
+        byte[] alpha = new byte[cropWidth * cropHeight];
+        int minX = cropWidth, minY = cropHeight, maxX = -1, maxY = -1;
+
+        for (int cy = 0; cy < cropHeight; cy++)
+        {
+            int scanYTop = cropTopY + cy;
+            int scanYBottom = scanHeight - 1 - scanYTop;
+            int scanRow = scanYBottom * scanWidth;
+
+            for (int cx = 0; cx < cropWidth; cx++)
+            {
+                Color32 color = scanPixels[scanRow + cropLeftX + cx];
+                byte a = ComputeArtworkAlpha(color);
+                alpha[cy * cropWidth + cx] = a;
+                if (a > 16)
+                {
+                    if (cx < minX) minX = cx;
+                    if (cx > maxX) maxX = cx;
+                    if (cy < minY) minY = cy;
+                    if (cy > maxY) maxY = cy;
+                }
+            }
+        }
+
+        if (maxX < minX || maxY < minY)
+        {
+            Debug.LogWarning($"[FishTexture] Không tìm thấy nét vẽ nào cho '{template.qrId}'.");
+            return null;
+        }
+
+        int pad = Mathf.Max(2, Mathf.RoundToInt(Mathf.Min(cropWidth, cropHeight) * 0.01f));
+        minX = Mathf.Max(0, minX - pad);
+        minY = Mathf.Max(0, minY - pad);
+        maxX = Mathf.Min(cropWidth - 1, maxX + pad);
+        maxY = Mathf.Min(cropHeight - 1, maxY + pad);
+        int trimmedWidth = maxX - minX + 1;
+        int trimmedHeight = maxY - minY + 1;
+
+        // Buoc 2: thu gon ve toi da outputWidth theo dung ty le that cua net ve (khong ep theo
+        // template nao ca - "dung ca buc tranh" dung nghia).
+        float scale = Mathf.Min(1f, Mathf.Max(64, outputWidth) / (float)Mathf.Max(trimmedWidth, trimmedHeight));
+        int finalWidth = Mathf.Max(1, Mathf.RoundToInt(trimmedWidth * scale));
+        int finalHeight = Mathf.Max(1, Mathf.RoundToInt(trimmedHeight * scale));
+
+        Texture2D output = new Texture2D(finalWidth, finalHeight, TextureFormat.RGBA32, false);
         try
         {
-            Texture2D output = new Texture2D(outputWidth, outputHeight, TextureFormat.RGBA32, false);
             // Các material rig hiện tại lật UV bằng texture scale X = -1.
             // Repeat giữ phép lật này hoạt động; Clamp sẽ kẹp toàn bộ UV âm vào
             // cột alpha 0 ở mép texture và khiến cá hoàn toàn vô hình.
             output.wrapMode = TextureWrapMode.Repeat;
             output.filterMode = FilterMode.Bilinear;
 
-            Color32[] scanPixels = scan.GetPixels32();
-            Color32[] maskPixels = mask.GetPixels32();
-            byte[] filledAlpha = GetFilledSilhouetteAlpha(
-                template.alphaTemplate, maskPixels, mask.width, mask.height);
-
-            if (autoAlignScannedArtwork && TryCalculateAlignedCrop(
-                    scanPixels,
-                    scan.width,
-                    scan.height,
-                    filledAlpha,
-                    mask.width,
-                    mask.height,
-                    scanCrop,
-                    out Rect alignedCrop))
-            {
-                scanCrop = alignedCrop;
-                Debug.Log($"[FishTexture] Auto-aligned '{template.qrId}' crop: " +
-                          $"x={scanCrop.x:F4}, y={scanCrop.y:F4}, " +
-                          $"w={scanCrop.width:F4}, h={scanCrop.height:F4}");
-            }
-
-            Color32[] result = new Color32[outputWidth * outputHeight];
+            Color32[] result = new Color32[finalWidth * finalHeight];
             int coloredPixelCount = 0;
             int opaquePixelCount = 0;
 
-            for (int y = 0; y < outputHeight; y++)
+            for (int fy = 0; fy < finalHeight; fy++)
             {
-                float v = y / (float)Mathf.Max(1, outputHeight - 1);
-                // scanCrop dùng gốc trên-trái, còn texture Unity dùng gốc dưới-trái.
-                float scanVTop = scanCrop.y + (1f - v) * scanCrop.height;
-                int scanYTop = Mathf.Clamp(Mathf.RoundToInt(scanVTop * (scan.height - 1)), 0, scan.height - 1);
-                int scanY = scan.height - 1 - scanYTop;
+                float v = fy / (float)Mathf.Max(1, finalHeight - 1);
+                // fy=0 (hang dau ghi vao result) se la hang DUOI CUNG cua texture Unity, nen
+                // lay tu DAY vung trim khi v=0 - dung quy uoc y-flip nhu pipeline cu.
+                int cy = Mathf.Clamp(Mathf.RoundToInt(minY + (1f - v) * (maxY - minY)), 0, cropHeight - 1);
+                int scanYTop = cropTopY + cy;
+                int scanYBottom = scanHeight - 1 - scanYTop;
+                int scanRow = scanYBottom * scanWidth;
 
-                for (int x = 0; x < outputWidth; x++)
+                for (int fx = 0; fx < finalWidth; fx++)
                 {
-                    float u = x / (float)Mathf.Max(1, outputWidth - 1);
-                    byte alpha = filledAlpha[y * outputWidth + x];
+                    float u = fx / (float)Mathf.Max(1, finalWidth - 1);
+                    int cx = Mathf.Clamp(Mathf.RoundToInt(minX + u * (maxX - minX)), 0, cropWidth - 1);
 
-                    float scanU = scanCrop.x + u * scanCrop.width;
-                    int scanX = Mathf.Clamp(Mathf.RoundToInt(scanU * (scan.width - 1)), 0, scan.width - 1);
-                    Color32 color = scanPixels[scanY * scan.width + scanX];
-                    color.a = alpha;
-                    result[y * outputWidth + x] = color;
+                    Color32 color = scanPixels[scanRow + cropLeftX + cx];
+                    color.a = alpha[cy * cropWidth + cx];
+                    result[fy * finalWidth + fx] = color;
 
-                    if (alpha > 127)
+                    if (color.a > 127)
                     {
                         opaquePixelCount++;
                         int maximum = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
@@ -665,13 +781,15 @@ public class QRFolderScanner : MonoBehaviour
             float coloredPercent = opaquePixelCount > 0
                 ? coloredPixelCount * 100f / opaquePixelCount
                 : 0f;
-            Debug.Log($"[FishTexture] Generated {output.width}x{output.height}; " +
-                      $"colored pixels inside fish: {coloredPercent:F1}%");
+            Debug.Log($"[FishTexture] '{template.qrId}': đường kẻ tại y={topLineYTop}/{bottomLineYTop} " +
+                      $"(cao {scanHeight}) -> vùng vẽ {trimmedWidth}x{trimmedHeight} -> " +
+                      $"texture {output.width}x{output.height}; màu trong nét vẽ: {coloredPercent:F1}%");
             return output;
         }
-        finally
+        catch
         {
-            Destroy(mask);
+            Destroy(output);
+            throw;
         }
     }
 
@@ -680,95 +798,115 @@ public class QRFolderScanner : MonoBehaviour
         FishTemplate template,
         Action<Texture2D> completed)
     {
-        Rect scanCrop = template.scanCrop;
-        if (scanCrop.width <= 0f || scanCrop.height <= 0f)
-            scanCrop = new Rect(0.01f, 0.095f, 0.98f, 0.8f);
+        Color32[] scanPixels = scan.GetPixels32();
+        int scanWidth = scan.width;
+        int scanHeight = scan.height;
 
-        int generatedWidth = Mathf.Max(256, outputWidth);
-        int generatedHeight = Mathf.Max(1,
-            Mathf.RoundToInt(generatedWidth * (template.alphaTemplate.height /
-                                               (float)template.alphaTemplate.width)));
-        Texture2D mask = null;
+        if (!TryFindHorizontalDividerLines(scanPixels, scanWidth, scanHeight,
+                out int topLineYTop, out int bottomLineYTop))
+        {
+            Debug.LogWarning($"[FishTexture] Không tìm thấy 2 đường kẻ ngang cho " +
+                              $"'{template.qrId}'; dùng toàn bộ ảnh.");
+            topLineYTop = 0;
+            bottomLineYTop = scanHeight - 1;
+        }
+
+        int inset = Mathf.RoundToInt(scanHeight * 0.006f) + 4;
+        int cropTopY = Mathf.Clamp(topLineYTop + inset, 0, scanHeight - 1);
+        int cropBottomY = Mathf.Clamp(bottomLineYTop - inset, 0, scanHeight - 1);
+        if (cropBottomY <= cropTopY) { cropTopY = 0; cropBottomY = scanHeight - 1; }
+
+        int marginX = Mathf.RoundToInt(scanWidth * 0.02f);
+        int cropLeftX = marginX;
+        int cropWidth = Mathf.Max(1, scanWidth - marginX * 2);
+        int cropHeight = cropBottomY - cropTopY + 1;
+
+        byte[] alpha = new byte[cropWidth * cropHeight];
+        int minX = cropWidth, minY = cropHeight, maxX = -1, maxY = -1;
+
+        var frameTimer = System.Diagnostics.Stopwatch.StartNew();
+        double budget = Math.Max(1d, processingFrameBudgetMs);
+
+        for (int cy = 0; cy < cropHeight; cy++)
+        {
+            int scanYTop = cropTopY + cy;
+            int scanYBottom = scanHeight - 1 - scanYTop;
+            int scanRow = scanYBottom * scanWidth;
+
+            for (int cx = 0; cx < cropWidth; cx++)
+            {
+                Color32 color = scanPixels[scanRow + cropLeftX + cx];
+                byte a = ComputeArtworkAlpha(color);
+                alpha[cy * cropWidth + cx] = a;
+                if (a > 16)
+                {
+                    if (cx < minX) minX = cx;
+                    if (cx > maxX) maxX = cx;
+                    if (cy < minY) minY = cy;
+                    if (cy > maxY) maxY = cy;
+                }
+            }
+
+            if (frameTimer.Elapsed.TotalMilliseconds >= budget)
+            {
+                frameTimer.Restart();
+                yield return null;
+            }
+        }
+
+        if (maxX < minX || maxY < minY)
+        {
+            Debug.LogWarning($"[FishTexture] Không tìm thấy nét vẽ nào cho '{template.qrId}'.");
+            completed(null);
+            yield break;
+        }
+
+        int pad = Mathf.Max(2, Mathf.RoundToInt(Mathf.Min(cropWidth, cropHeight) * 0.01f));
+        minX = Mathf.Max(0, minX - pad);
+        minY = Mathf.Max(0, minY - pad);
+        maxX = Mathf.Min(cropWidth - 1, maxX + pad);
+        maxY = Mathf.Min(cropHeight - 1, maxY + pad);
+        int trimmedWidth = maxX - minX + 1;
+        int trimmedHeight = maxY - minY + 1;
+
+        float scale = Mathf.Min(1f, Mathf.Max(64, outputWidth) / (float)Mathf.Max(trimmedWidth, trimmedHeight));
+        int finalWidth = Mathf.Max(1, Mathf.RoundToInt(trimmedWidth * scale));
+        int finalHeight = Mathf.Max(1, Mathf.RoundToInt(trimmedHeight * scale));
+
         Texture2D output = null;
         bool ownershipTransferred = false;
 
         try
         {
             output = new Texture2D(
-                generatedWidth, generatedHeight, TextureFormat.RGBA32, false)
+                finalWidth, finalHeight, TextureFormat.RGBA32, false)
             {
                 wrapMode = TextureWrapMode.Repeat,
                 filterMode = FilterMode.Bilinear
             };
-
-            Color32[] scanPixels = scan.GetPixels32();
-            string alphaCacheKey = template.alphaTemplate.GetInstanceID() + ":" +
-                                   generatedWidth + "x" + generatedHeight;
-            byte[] filledAlpha;
-            if (!FilledAlphaCache.TryGetValue(alphaCacheKey, out filledAlpha))
-            {
-                mask = CreateReadableCopy(
-                    template.alphaTemplate, generatedWidth, generatedHeight);
-                Color32[] maskPixels = mask.GetPixels32();
-                Task<byte[]> alphaTask = Task.Run(() =>
-                    CalculateFilledSilhouetteAlpha(
-                        maskPixels, generatedWidth, generatedHeight));
-                while (!alphaTask.IsCompleted)
-                    yield return null;
-
-                if (alphaTask.IsFaulted || alphaTask.IsCanceled)
-                    yield break;
-
-                filledAlpha = alphaTask.Result;
-                FilledAlphaCache[alphaCacheKey] = filledAlpha;
-            }
-
-            if (autoAlignScannedArtwork && TryCalculateAlignedCrop(
-                    scanPixels,
-                    scan.width,
-                    scan.height,
-                    filledAlpha,
-                    generatedWidth,
-                    generatedHeight,
-                    scanCrop,
-                    out Rect alignedCrop))
-            {
-                scanCrop = alignedCrop;
-                Debug.Log($"[FishTexture] Auto-aligned '{template.qrId}' crop: " +
-                          $"x={scanCrop.x:F4}, y={scanCrop.y:F4}, " +
-                          $"w={scanCrop.width:F4}, h={scanCrop.height:F4}");
-            }
-
-            Color32[] resultPixels = new Color32[generatedWidth * generatedHeight];
+            Color32[] resultPixels = new Color32[finalWidth * finalHeight];
             int coloredPixelCount = 0;
             int opaquePixelCount = 0;
-            var frameTimer = System.Diagnostics.Stopwatch.StartNew();
-            double budget = Math.Max(1d, processingFrameBudgetMs);
+            frameTimer.Restart();
 
-            for (int y = 0; y < generatedHeight; y++)
+            for (int fy = 0; fy < finalHeight; fy++)
             {
-                float v = y / (float)Mathf.Max(1, generatedHeight - 1);
-                float scanVTop = scanCrop.y + (1f - v) * scanCrop.height;
-                int scanYTop = Mathf.Clamp(
-                    Mathf.RoundToInt(scanVTop * (scan.height - 1)),
-                    0,
-                    scan.height - 1);
-                int scanY = scan.height - 1 - scanYTop;
+                float v = fy / (float)Mathf.Max(1, finalHeight - 1);
+                int cy = Mathf.Clamp(Mathf.RoundToInt(minY + (1f - v) * (maxY - minY)), 0, cropHeight - 1);
+                int scanYTop2 = cropTopY + cy;
+                int scanYBottom2 = scanHeight - 1 - scanYTop2;
+                int scanRow2 = scanYBottom2 * scanWidth;
 
-                for (int x = 0; x < generatedWidth; x++)
+                for (int fx = 0; fx < finalWidth; fx++)
                 {
-                    float u = x / (float)Mathf.Max(1, generatedWidth - 1);
-                    byte alpha = filledAlpha[y * generatedWidth + x];
-                    float scanU = scanCrop.x + u * scanCrop.width;
-                    int scanX = Mathf.Clamp(
-                        Mathf.RoundToInt(scanU * (scan.width - 1)),
-                        0,
-                        scan.width - 1);
-                    Color32 color = scanPixels[scanY * scan.width + scanX];
-                    color.a = alpha;
-                    resultPixels[y * generatedWidth + x] = color;
+                    float u = fx / (float)Mathf.Max(1, finalWidth - 1);
+                    int cx = Mathf.Clamp(Mathf.RoundToInt(minX + u * (maxX - minX)), 0, cropWidth - 1);
 
-                    if (alpha > 127)
+                    Color32 color = scanPixels[scanRow2 + cropLeftX + cx];
+                    color.a = alpha[cy * cropWidth + cx];
+                    resultPixels[fy * finalWidth + fx] = color;
+
+                    if (color.a > 127)
                     {
                         opaquePixelCount++;
                         int maximum = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
@@ -791,275 +929,18 @@ public class QRFolderScanner : MonoBehaviour
             float coloredPercent = opaquePixelCount > 0
                 ? coloredPixelCount * 100f / opaquePixelCount
                 : 0f;
-            Debug.Log($"[FishTexture] Generated {output.width}x{output.height}; " +
-                      $"colored pixels inside fish: {coloredPercent:F1}%");
+            Debug.Log($"[FishTexture] '{template.qrId}': đường kẻ tại y={topLineYTop}/{bottomLineYTop} " +
+                      $"(cao {scanHeight}) -> vùng vẽ {trimmedWidth}x{trimmedHeight} -> " +
+                      $"texture {output.width}x{output.height}; màu trong nét vẽ: {coloredPercent:F1}%");
 
             completed(output);
             ownershipTransferred = true;
         }
         finally
         {
-            if (mask != null)
-                Destroy(mask);
             if (!ownershipTransferred && output != null)
                 Destroy(output);
         }
-    }
-
-    bool TryCalculateAlignedCrop(
-        Color32[] scanPixels,
-        int scanWidth,
-        int scanHeight,
-        byte[] silhouetteAlpha,
-        int silhouetteWidth,
-        int silhouetteHeight,
-        Rect expectedScanCrop,
-        out Rect crop)
-    {
-        crop = default;
-        if (!TryGetAlphaBounds(
-                silhouetteAlpha,
-                silhouetteWidth,
-                silhouetteHeight,
-                out Rect templateBounds))
-            return false;
-
-        float templatePixelAspect =
-            (templateBounds.width * silhouetteWidth) /
-            Mathf.Max(1f, templateBounds.height * silhouetteHeight);
-
-        // Chi tim trong vung lan can Scan Crop da khai bao, khong quet ca trang,
-        // de QR/tieu de/logo tai tro (cung nam tren trang scan) khong bi nham
-        // thanh "vung ca" khi tre to mau nhat hon cac khoi in san.
-        Rect searchRegion = ExpandNormalizedRect(expectedScanCrop, autoAlignSearchPadding);
-
-        if (!TryGetArtworkBounds(
-                scanPixels,
-                scanWidth,
-                scanHeight,
-                templatePixelAspect,
-                searchRegion,
-                out Rect artworkBounds))
-            return false;
-
-        float width = artworkBounds.width / Mathf.Max(0.0001f, templateBounds.width);
-        float height = artworkBounds.height / Mathf.Max(0.0001f, templateBounds.height);
-        float x = artworkBounds.xMin - templateBounds.xMin * width;
-        float y = artworkBounds.yMin - templateBounds.yMin * height;
-
-        Rect candidate = new Rect(x, y, width, height);
-        if (candidate.width < 0.2f || candidate.width > 1.1f ||
-            candidate.height < 0.2f || candidate.height > 1.1f ||
-            candidate.xMin < -0.08f || candidate.yMin < -0.08f ||
-            candidate.xMax > 1.08f || candidate.yMax > 1.08f)
-            return false;
-
-        crop = candidate;
-        return true;
-    }
-
-    bool TryGetAlphaBounds(
-        byte[] alpha,
-        int width,
-        int height,
-        out Rect bounds)
-    {
-        int minX = width;
-        int minYTop = height;
-        int maxX = -1;
-        int maxYTop = -1;
-
-        for (int yBottom = 0; yBottom < height; yBottom++)
-        {
-            int yTop = height - 1 - yBottom;
-            int row = yBottom * width;
-            for (int x = 0; x < width; x++)
-            {
-                if (alpha[row + x] <= 32)
-                    continue;
-
-                minX = Mathf.Min(minX, x);
-                maxX = Mathf.Max(maxX, x);
-                minYTop = Mathf.Min(minYTop, yTop);
-                maxYTop = Mathf.Max(maxYTop, yTop);
-            }
-        }
-
-        if (maxX < minX || maxYTop < minYTop)
-        {
-            bounds = default;
-            return false;
-        }
-
-        bounds = Rect.MinMaxRect(
-            minX / (float)width,
-            minYTop / (float)height,
-            (maxX + 1f) / width,
-            (maxYTop + 1f) / height);
-        return true;
-    }
-
-    bool TryGetArtworkBounds(
-        Color32[] pixels,
-        int width,
-        int height,
-        float targetAspect,
-        Rect searchRegion,
-        out Rect bounds)
-    {
-        int maximumDimension = Mathf.Clamp(alignmentSampleResolution, 256, 1024);
-        int stride = Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(width, height) / (float)maximumDimension));
-        int gridWidth = Mathf.CeilToInt(width / (float)stride);
-        int gridHeight = Mathf.CeilToInt(height / (float)stride);
-        int gridLength = gridWidth * gridHeight;
-
-        bool[] dark = new bool[gridLength];
-        bool[] visited = new bool[gridLength];
-        int borderX = Mathf.Max(1, Mathf.RoundToInt(gridWidth * 0.012f));
-        int borderY = Mathf.Max(1, Mathf.RoundToInt(gridHeight * 0.012f));
-        int threshold = Mathf.Clamp(artworkDarkPixelThreshold, 40, 180);
-
-        for (int gy = borderY; gy < gridHeight - borderY; gy++)
-        {
-            int yTop = Mathf.Min(height - 1, gy * stride + stride / 2);
-            float vTop = yTop / (float)height;
-            if (vTop < searchRegion.yMin || vTop > searchRegion.yMax)
-                continue;
-
-            int yBottom = height - 1 - yTop;
-            for (int gx = borderX; gx < gridWidth - borderX; gx++)
-            {
-                int x = Mathf.Min(width - 1, gx * stride + stride / 2);
-                float u = x / (float)width;
-                if (u < searchRegion.xMin || u > searchRegion.xMax)
-                    continue;
-
-                Color32 color = pixels[yBottom * width + x];
-                int luminance = (299 * color.r + 587 * color.g + 114 * color.b) / 1000;
-                dark[gy * gridWidth + gx] = luminance < threshold;
-            }
-        }
-
-        int[] queue = new int[gridLength];
-        float bestScore = 0f;
-        int bestMinX = 0;
-        int bestMinY = 0;
-        int bestMaxX = -1;
-        int bestMaxY = -1;
-
-        for (int start = 0; start < gridLength; start++)
-        {
-            if (!dark[start] || visited[start])
-                continue;
-
-            int head = 0;
-            int tail = 0;
-            int count = 0;
-            int startX = start % gridWidth;
-            int startY = start / gridWidth;
-            int minX = startX;
-            int maxX = startX;
-            int minY = startY;
-            int maxY = startY;
-            queue[tail++] = start;
-            visited[start] = true;
-
-            while (head < tail)
-            {
-                int current = queue[head++];
-                int x = current % gridWidth;
-                int y = current / gridWidth;
-                count++;
-                minX = Mathf.Min(minX, x);
-                maxX = Mathf.Max(maxX, x);
-                minY = Mathf.Min(minY, y);
-                maxY = Mathf.Max(maxY, y);
-
-                VisitDarkNeighbour(current - 1, x > 0, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current + 1, x + 1 < gridWidth, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current - gridWidth, y > 0, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current + gridWidth, y + 1 < gridHeight, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current - gridWidth - 1, x > 0 && y > 0, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current - gridWidth + 1, x + 1 < gridWidth && y > 0, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current + gridWidth - 1, x > 0 && y + 1 < gridHeight, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current + gridWidth + 1,
-                    x + 1 < gridWidth && y + 1 < gridHeight,
-                    dark,
-                    visited,
-                    queue,
-                    ref tail);
-                VisitDarkNeighbour(current - gridWidth - 1, x > 0 && y > 0, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current - gridWidth + 1, x + 1 < gridWidth && y > 0, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current + gridWidth - 1, x > 0 && y + 1 < gridHeight, dark, visited, queue, ref tail);
-                VisitDarkNeighbour(current + gridWidth + 1,
-                    x + 1 < gridWidth && y + 1 < gridHeight,
-                    dark,
-                    visited,
-                    queue,
-                    ref tail);
-            }
-
-            if (count < 24)
-                continue;
-
-            float componentWidth = (maxX - minX + 1) * stride;
-            float componentHeight = (maxY - minY + 1) * stride;
-            float componentAspect = componentWidth / Mathf.Max(1f, componentHeight);
-            float aspectError = Mathf.Abs(Mathf.Log(
-                componentAspect / Mathf.Max(0.001f, targetAspect)));
-            float score = count / (1f + aspectError * 4f);
-
-            if (score <= bestScore)
-                continue;
-
-            bestScore = score;
-            bestMinX = minX;
-            bestMaxX = maxX;
-            bestMinY = minY;
-            bestMaxY = maxY;
-        }
-
-        if (bestMaxX < bestMinX || bestMaxY < bestMinY)
-        {
-            bounds = default;
-            return false;
-        }
-
-        // Nới rất nhẹ để giữ đủ phần anti-alias ở nét viền ngoài.
-        float paddingX = stride * 0.75f / width;
-        float paddingY = stride * 0.75f / height;
-        bounds = Rect.MinMaxRect(
-            Mathf.Max(0f, bestMinX * stride / (float)width - paddingX),
-            Mathf.Max(0f, bestMinY * stride / (float)height - paddingY),
-            Mathf.Min(1f, (bestMaxX + 1) * stride / (float)width + paddingX),
-            Mathf.Min(1f, (bestMaxY + 1) * stride / (float)height + paddingY));
-        return true;
-    }
-
-    static Rect ExpandNormalizedRect(Rect rect, float padding)
-    {
-        float padX = rect.width * padding;
-        float padY = rect.height * padding;
-        return Rect.MinMaxRect(
-            Mathf.Clamp01(rect.xMin - padX),
-            Mathf.Clamp01(rect.yMin - padY),
-            Mathf.Clamp01(rect.xMax + padX),
-            Mathf.Clamp01(rect.yMax + padY));
-    }
-
-    static void VisitDarkNeighbour(
-        int index,
-        bool isValid,
-        bool[] dark,
-        bool[] visited,
-        int[] queue,
-        ref int tail)
-    {
-        if (!isValid || !dark[index] || visited[index])
-            return;
-
-        visited[index] = true;
-        queue[tail++] = index;
     }
 
     GameObject CreateFish(
@@ -1148,6 +1029,24 @@ public class QRFolderScanner : MonoBehaviour
             }
         }
 
+        if (!isDefaultFish)
+        {
+            // Prefab's baked X/Y scale assumed the old fixed-canvas template aspect; the mesh is
+            // just a 1:1 quad (see Ca_Voi.prefab), so with the new crop (aspect now follows
+            // whatever the visitor actually drew) that baked ratio would stretch/squash the fish.
+            // Keep the same visual "size" (geometric-mean area) but redistribute X/Y to match the
+            // generated texture's real aspect, preserving sign so mirroring/flip rigs still work.
+            Vector3 currentScale = fish.transform.localScale;
+            float referenceSize = Mathf.Sqrt(Mathf.Abs(currentScale.x) * Mathf.Abs(currentScale.y));
+            float textureAspect = Mathf.Clamp(
+                (float)texture.width / Mathf.Max(1, texture.height), 0.25f, 4f);
+            float aspectRoot = Mathf.Sqrt(textureAspect);
+            fish.transform.localScale = new Vector3(
+                Mathf.Sign(currentScale.x == 0f ? 1f : currentScale.x) * referenceSize * aspectRoot,
+                Mathf.Sign(currentScale.y == 0f ? 1f : currentScale.y) * referenceSize / aspectRoot,
+                currentScale.z);
+        }
+
         PlayerFishTextureApplicator applicator = PlayerFishTextureApplicator.Apply(
             fish,
             texture,
@@ -1199,9 +1098,54 @@ public class QRFolderScanner : MonoBehaviour
         if (interactionSettings != null)
             interactionSettings.ConfigureClickInteraction(fish, template.qrId);
 
+        if (!isDefaultFish)
+            playerFish.Add(fish);
+
         Debug.Log($"[QR] Spawn: {spawnPosition}, landing: {landingPosition}, " +
                   $"texture: {texture.width}x{texture.height}");
         return fish;
+    }
+
+    /// <summary>
+    /// Phim R: xoa toan bo ca do nguoi choi quet QR tao ra (dang cho trong hang doi lan da
+    /// tha boi), giu nguyen ca mac dinh/background (BackgroundFishSpawner va SpawnDefaultFish).
+    /// </summary>
+    public void RemovePlayerFish()
+    {
+        int removed = 0;
+        for (int i = playerFish.Count - 1; i >= 0; i--)
+        {
+            GameObject fish = playerFish[i];
+            if (fish == null)
+                continue;
+
+            Destroy(fish);
+            removed++;
+        }
+
+        playerFish.Clear();
+        pendingFish.Clear();
+        Debug.Log($"<color=orange>[QR]</color> Đã xoá {removed} cá người chơi " +
+                  "(giữ nguyên cá mặc định/background).");
+    }
+
+    void Update()
+    {
+        if (WasResetKeyPressed())
+            RemovePlayerFish();
+    }
+
+    static bool WasResetKeyPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
+            return true;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.R);
+#else
+        return false;
+#endif
     }
 
     static FishMotionSpecies GetMotionSpecies(string fishId)
@@ -1734,128 +1678,6 @@ public class QRFolderScanner : MonoBehaviour
         rotated.SetPixels32(destPixels);
         rotated.Apply(false, false);
         return rotated;
-    }
-
-    static Texture2D CreateReadableCopy(Texture source, int width, int height)
-    {
-        RenderTexture temporary = RenderTexture.GetTemporary(
-            width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-        RenderTexture previous = RenderTexture.active;
-
-        try
-        {
-            Graphics.Blit(source, temporary);
-            RenderTexture.active = temporary;
-            Texture2D copy = new Texture2D(width, height, TextureFormat.RGBA32, false);
-            copy.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-            copy.Apply(false, false);
-            return copy;
-        }
-        finally
-        {
-            RenderTexture.active = previous;
-            RenderTexture.ReleaseTemporary(temporary);
-        }
-    }
-
-    static byte[] GetFilledSilhouetteAlpha(
-        Texture2D sourceTemplate,
-        Color32[] maskPixels,
-        int width,
-        int height)
-    {
-        string cacheKey = sourceTemplate.GetInstanceID() + ":" + width + "x" + height;
-        if (FilledAlphaCache.TryGetValue(cacheKey, out byte[] cachedAlpha))
-            return cachedAlpha;
-
-        int pixelCount = width * height;
-        // 0 = chưa phân loại, 1 = nền ngoài, 2 = nét biên.
-        byte[] state = new byte[pixelCount];
-        byte[] filledAlpha = new byte[pixelCount];
-
-        // Dilate nét template một pixel để đóng các khe rất nhỏ sinh ra khi resize.
-        // Nếu không đóng khe, flood fill có thể lọt vào bên trong thân cá.
-        for (int y = 0; y < height; y++)
-        {
-            int minY = Mathf.Max(0, y - 1);
-            int maxY = Mathf.Min(height - 1, y + 1);
-
-            for (int x = 0; x < width; x++)
-            {
-                int minX = Mathf.Max(0, x - 1);
-                int maxX = Mathf.Min(width - 1, x + 1);
-                bool isBoundary = false;
-
-                for (int sampleY = minY; sampleY <= maxY && !isBoundary; sampleY++)
-                {
-                    int sampleRow = sampleY * width;
-                    for (int sampleX = minX; sampleX <= maxX; sampleX++)
-                    {
-                        if (maskPixels[sampleRow + sampleX].a > 8)
-                        {
-                            isBoundary = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (isBoundary)
-                    state[y * width + x] = 2;
-            }
-        }
-
-        int[] queue = new int[pixelCount];
-        int head = 0;
-        int tail = 0;
-
-        void EnqueueOutside(int index)
-        {
-            if (state[index] != 0)
-                return;
-
-            state[index] = 1;
-            queue[tail++] = index;
-        }
-
-        for (int x = 0; x < width; x++)
-        {
-            EnqueueOutside(x);
-            EnqueueOutside((height - 1) * width + x);
-        }
-
-        for (int y = 0; y < height; y++)
-        {
-            EnqueueOutside(y * width);
-            EnqueueOutside(y * width + width - 1);
-        }
-
-        while (head < tail)
-        {
-            int index = queue[head++];
-            int x = index % width;
-            int y = index / width;
-
-            if (x > 0) EnqueueOutside(index - 1);
-            if (x + 1 < width) EnqueueOutside(index + 1);
-            if (y > 0) EnqueueOutside(index - width);
-            if (y + 1 < height) EnqueueOutside(index + width);
-        }
-
-        int opaqueCount = 0;
-        for (int i = 0; i < pixelCount; i++)
-        {
-            // Mọi pixel flood-fill không chạm tới đều nằm trong silhouette kín.
-            if (state[i] != 1)
-            {
-                filledAlpha[i] = 255;
-                opaqueCount++;
-            }
-        }
-
-        FilledAlphaCache[cacheKey] = filledAlpha;
-        Debug.Log($"[FishTexture] Filled silhouette alpha: " +
-                  $"{opaqueCount * 100f / pixelCount:F1}% opaque");
-        return filledAlpha;
     }
 
     // Bản thuần CPU dùng bởi worker thread của luồng import I.

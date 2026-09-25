@@ -154,6 +154,14 @@ public class BackgroundFishSpawner : MonoBehaviour
         if (!useMouse)
         {
             TriggerFishFromOsc();
+
+            // Cong cu debug/van hanh: chuot that (KHONG phai vi tri track tu OSC - xem
+            // TryReadPointerPress vs TriggerFishFromOsc, 2 nhanh doc lap hoan toan) van duoc
+            // dung de xoa han 1 con ca duoi con tro ngay ca khi dang o OSC mode, de khong can
+            // doi interactionSource sang Mouse (se tat luon tuong tac OSC that) chi de don ca loi.
+            if (TryReadPointerPress(0, out Vector2 deleteScreenPosition))
+                FishClickInteraction.TryDeleteAtScreenPosition(Camera.main, deleteScreenPosition);
+
             return;
         }
 
@@ -1217,8 +1225,31 @@ sealed class FishClickInteraction : MonoBehaviour
         Vector2 screenPosition,
         ClickSpinVariant spinVariant = ClickSpinVariant.Random)
     {
-        if (camera == null)
+        FishClickInteraction bestCandidate = FindCandidate(camera, screenPosition, skipEscaping: true);
+        if (bestCandidate == null)
             return false;
+
+        bestCandidate.TriggerFromScreenPosition(camera, screenPosition, spinVariant);
+        return true;
+    }
+
+    // Cong cu debug: xoa hang cham (khong doa chay) mot con ca duoi con tro - dung rieng cho
+    // chuot that trong OSC mode (xem BackgroundFishSpawner.Update), KHONG dung cho vi tri
+    // track tu OSC, de khong bien tuong tac OSC binh thuong thanh xoa ca.
+    public static bool TryDeleteAtScreenPosition(Camera camera, Vector2 screenPosition)
+    {
+        FishClickInteraction bestCandidate = FindCandidate(camera, screenPosition, skipEscaping: false);
+        if (bestCandidate == null)
+            return false;
+
+        bestCandidate.DeleteWithPop();
+        return true;
+    }
+
+    static FishClickInteraction FindCandidate(Camera camera, Vector2 screenPosition, bool skipEscaping)
+    {
+        if (camera == null)
+            return null;
 
         FishClickInteraction bestCandidate = null;
         float bestDepth = float.PositiveInfinity;
@@ -1233,7 +1264,7 @@ sealed class FishClickInteraction : MonoBehaviour
                 continue;
             }
 
-            if (!interaction.isActiveAndEnabled || interaction.isEscaping ||
+            if (!interaction.isActiveAndEnabled || (skipEscaping && interaction.isEscaping) ||
                 !interaction.TryGetScreenRect(camera, out Rect screenRect, out float depth))
                 continue;
 
@@ -1250,11 +1281,7 @@ sealed class FishClickInteraction : MonoBehaviour
             }
         }
 
-        if (bestCandidate == null)
-            return false;
-
-        bestCandidate.TriggerFromScreenPosition(camera, screenPosition, spinVariant);
-        return true;
+        return bestCandidate;
     }
 
     public static bool TryGetRandomActiveFish(
@@ -1485,6 +1512,26 @@ sealed class FishClickInteraction : MonoBehaviour
     }
 
     void ClearEscaping() => isEscaping = false;
+
+    // Xoa hang ca cu the qua chuot that trong OSC mode (xem TryDeleteAtScreenPosition) - khac
+    // TriggerEscape (chi doa chay): con ca bien mat han, co bong bong + hieu ung thu nho cho
+    // ro rang la bi xoa chu khong phai giat minh boi thuong.
+    public void DeleteWithPop()
+    {
+        clickSpinTween?.Kill();
+        CancelInvoke(nameof(ClearEscaping));
+        isEscaping = true;
+        CreateBubbleBurst();
+
+        transform.DOKill();
+        transform.DOScale(Vector3.zero, 0.22f)
+            .SetEase(Ease.InBack)
+            .OnComplete(() =>
+            {
+                if (this != null)
+                    Destroy(gameObject);
+            });
+    }
 
     void CreateBubbleBurst()
     {
